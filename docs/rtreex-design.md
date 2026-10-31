@@ -1,7 +1,6 @@
 # RTreeX — M1/M2 Implementation Notes
 
-**Status:** M1/M2 integrated; M3 bulk loading qualified on a feature branch.
-No DUB release has been prepared.
+**Status:** M1–M3 implemented and CI-qualified; no DUB release prepared.
 
 ## API and semantics
 
@@ -103,7 +102,8 @@ independent STR/Hilbert index variants or forced reinsertion.
 - Query timings were not uniformly better: for 1M urban entries, 200
   queries took 1.946 ms after packed loading versus 1.270 ms after
   incremental insertion. No blanket search-speed advantage is claimed.
-- DMD 2.111 and LDC 1.41 performed the comparisons; see the CSV logs and
+- DMD 2.111 and LDC 1.41 performed the comparisons; see
+  `docs/m3-performance-2026-10-31.md`, CSV artifacts and
   `benchmarks/README.md`.
 - `storageStats` exposes node slots and a clear structural byte lower bound.
 - GC allocation deltas are indicative, not reliable exact index footprint.
