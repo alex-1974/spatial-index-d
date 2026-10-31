@@ -2,9 +2,9 @@
 
 ## Status
 
-Repository bootstrap. No published version and no implemented public RTreeX
-contract. Start with 2D axis-aligned bounding-box indexing; do not promise a
-3D or generic N-dimensional product before actual consumer qualification.
+M1/M2 dynamic RTreeX implementation prepared and tested on a feature branch;
+no public release or DUB registry publication. The first supported dimension
+is 2D; other index families and dimensions are not implied.
 
 ## M0 — Repository baseline
 
@@ -13,32 +13,33 @@ contract. Start with 2D axis-aligned bounding-box indexing; do not promise a
 - [x] Define ownership and architecture questions in ADRs.
 - [x] Add fast DMD/LDC checks and controlled release matrix configuration.
 - [x] Add external consumer smoke-test package.
-- [ ] Verify both compiler families and CI pass.
-- [ ] Switch GitHub default branch to `develop` after creating the branches.
+- [x] Verify fast DMD/LDC compiler families and CI pass for M1/M2.
+- [x] Switch GitHub default branch to `develop` after creating the branches.
 - [ ] Remove obsolete `master` once `develop` is default and `main` exists.
 
 ## M1 — RTreeX public contract
 
-- [ ] Decide bounding-box scalar policy (initially 2D), invalid/empty bounds
+- [x] Decide bounding-box scalar policy (initially 2D), invalid/empty bounds
       handling and edge-touching intersection rules.
-- [ ] Define payload identity, insertion/remove/update signatures, duplicate
+- [x] Define payload identity, insertion/remove/update signatures, duplicate
       policy and stable-handle semantics.
-- [ ] Define callback/visitor query, early-stop and result ordering contracts.
-- [ ] Define explicit allocation, ownership, move and iterator invalidation
+- [x] Define callback/visitor query, early-stop and result ordering contracts.
+- [x] Define explicit allocation, ownership, move and iterator invalidation
       behaviour; decide whether a thread-safe variant is warranted (not default).
-- [ ] Review consumer interoperability with `geo-d` without taking a mandatory
+- [x] Review consumer interoperability with `geo-d` without taking a mandatory
       geometry dependency.
-- [ ] Implement external consumer tests for the selected API.
+- [x] Implement external consumer tests for the selected API.
 
 ## M2 — Dynamic index core
 
-- [ ] Implement compact node pool and free-list management.
-- [ ] Implement correct search and insertion.
-- [ ] Evaluate R*-style subtree selection/split against simpler variants.
-- [ ] Implement erase/update, root contraction and empty-tree handling.
-- [ ] Test adversarial overlap, degeneracy, repeated updates, delete/reinsert,
+- [x] Implement compact node pool and free-list management.
+- [x] Implement correct search and insertion.
+- [x] Implement R*-inspired subtree selection/split; defer comparative
+      performance measurement against simpler variants to M3.
+- [x] Implement erase/update, root contraction and empty-tree handling.
+- [x] Test adversarial overlap, degeneracy, repeated updates, delete/reinsert,
       zero and large populations and memory invariants.
-- [ ] Ensure deterministic structural invariants and useful diagnostics.
+- [x] Ensure deterministic structural invariants and useful diagnostics.
 
 ## M3 — Bulk loading and performance
 

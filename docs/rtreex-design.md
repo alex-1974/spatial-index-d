@@ -1,49 +1,103 @@
-# RTreeX — Engineering design notes
+# RTreeX — M1/M2 Implementation Notes
 
-**Status:** design candidate, not implemented or public API.
+**Status:** implemented on feature branch; DUB release not yet prepared.
 
-## Required editor operations
+## API and semantics
 
-| Operation | Intended use | Main concern |
-| --- | --- | --- |
-| Insert | add a node, way or indexed segment | stable identity |
-| Remove | delete from working graph | correct removal |
-| Update | move a node, change Way bounds | consistent index |
-| Search | viewport intersection | candidate false positives |
-| Point/radius candidate query | hit-testing and snapping | exact test belongs to caller |
-| Bulk load | load downloaded OSM region | build speed / memory |
+The accepted public contract is
+[ADR-0002](adr/ADR-0002-rtreex-m1-contract.md).
 
-## Algorithm candidates
+- `RTreeX!(T, Id = ulong, MaxEntries = 16)`
+- `Bounds2!T(minX, minY, maxX, maxY)`; default `.init` is invalid/empty.
+- `insert(id, bounds)`, `remove(id)`, `update(id, bounds)`
+- `tryGetBounds(id, ref bounds)`, `search(bounds, visitor)`
+- `length`, `empty` and `clear`
 
-1. R*-inspired choose-subtree and split optimization for dynamic updates.
-2. RBush-inspired overlap-minimizing top-down bulk loader (OMT).
-3. Compact node pool and iterative traversal for cache locality.
-4. Packed/Hilbert static structures may be separate indexes later.
-5. SIMD comparison only after representative measurements.
+Only 2D bounding boxes are included. Search returns broad-phase
+candidates; exact geometry is an independent consumer responsibility.
 
-Avoid a combined design with complex incremental and static tiers before the
-single dynamic implementation is measured.
+## Storage and ownership
 
-## Required contracts before implementation
+Nodes live in a dense dynamic array. Free node slots are recycled through
+a free-list rather than independently allocating each tree node. Each node
+has up to `MaxEntries` live entries plus one temporary overflow slot.
 
-- Empty, inverted, degenerate, touching and non-finite bounding boxes.
-- Payload identity, duplicate insertion, removal by ID/handle, and updates.
-- No geometry ownership; explicit memory and lifetime model.
-- Iterator and callback invalidation on mutation; concurrent access policy.
-- Query order versus deterministic membership.
-- Reporting failure without corrupting the tree.
-- Unbounded geographic extents and antimeridian handling belong to caller's
-  coordinate representation, not hidden index normalization.
-- No automatic full-geometry predicate: bounds are only a prefilter.
+Each live leaf entry stores copied bounds and one caller ID; internal entries
+store a bounding rectangle and a child pool index. The implementation uses
+one uniform entry representation for simplicity; a later memory study may
+justify specialized leaf and internal layouts.
 
-## Minimal practical qualification
+A secondary `ID -> bounds` associative array lets callers erase/update
+by ID without retaining the previous rectangle. The map is an intentional
+memory/correctness trade-off: it increases per-entry memory but keeps the
+initial API simple and removals spatially restricted. Revisit if M3 shows
+significant memory pressure in Dunia.
 
-- Differential tests against a linear scan and independent box-overlap oracle.
-- Mixed insert/remove/update workloads, empty and degenerate cases.
-- Consumer smoke test importing the package from another DUB project.
-- Three realistic object sizes: around 10k, 100k, 1M.
-- Compare bytes per object, build time, viewport query time and update cost.
-- At least one dense city extract and one sparse/long-way distribution.
-- Both DMD and LDC; release builds before performance comparisons.
+The index does **not** own the referenced geometries and has no pointers
+into caller memory. The index aggregate is noncopyable; no external node
+slot or iterator handles are exposed.
 
-No publication until an initial consumer-facing API is frozen.
+## Search / insertion
+
+Traversal is recursive with depth bounded by the R-tree height; the query
+path uses no intermediate result array. The visitor can stop early.
+
+- Parents immediately above leaves are selected by minimal additional
+  overlap, then area enlargement and area.
+- Higher parents are selected by minimal area enlargement, then area.
+- Full nodes are split using an R*-inspired axis choice: summed margins
+  of legal distributions along lower and upper coordinate orders.
+- The chosen axis is split at minimal bounding-box overlap, then
+  minimal combined area. Deterministic tie-breaking favors the first
+  candidate order.
+
+Forced reinsertion is **not** implemented: it increases mutation cost and
+should only be added if measured editor workloads demonstrate a benefit.
+
+## Deletion / updates
+
+A removal finds the existing bounds through the ID map and descends only
+through intersecting child rectangles. An underfull non-root child is
+removed, its surviving entries are collected and reinserted. Root
+contraction removes single-child roots after deletions.
+
+An update removes the old spatial entry and inserts the new bounds while
+preserving the caller ID. Precondition failures are non-destructive;
+there is no promised transactional rollback for allocator failures.
+
+No concurrent mutation or reentrant mutation from search visitors is
+supported; callers must synchronize access.
+
+## Correctness qualification
+
+The M2 suite includes:
+
+- degenerate and touching rectangles;
+- invalid/inverted/nonfinite input and repeated IDs;
+- root split, root shrink, node recycling and complete deletion;
+- a 400-entry mixed edit scenario;
+- a seeded, deterministic 6,000-operation differential test against a
+  simple ID-to-box map and linear-scan query oracle;
+- internal node and parent-bounds invariant checks;
+- an independent external DUB consumer exercise.
+
+Compiler qualification: fast DMD 2.111.0 and LDC 1.41.0 CI, additional
+controlled six-compiler matrix at release gate. CI is authoritative, not a
+claim about local XPS builds.
+
+## Explicitly deferred beyond M2
+
+- OMT / STR / Hilbert bulk load; see Issue #4 (M3).
+- Runtime nearest-neighbor/radius contracts and metrics.
+- Specialized compact leaf layouts and SIMD.
+- Packed static tree or two-tier static/dynamic index.
+- Data persistence, concurrency and snapshots.
+- 3D / general N-dimensional API.
+- Dunia entity-vs-segment indexing policy; see Issue #5 (M4).
+
+## Performance policy
+
+Benchmark actual viewer/cursor workloads at ~10k, 100k and 1M entries.
+Compare build time, candidate query latency, editor updates and bytes per
+object under DMD/LDC release builds. Prefer a small reproducible harness
+to elaborate synthetic benchmark frameworks.

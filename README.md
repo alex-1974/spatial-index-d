@@ -2,8 +2,8 @@
 
 Reusable spatial indexing data structures for D.
 
-**Status:** repository bootstrap / pre-implementation. No spatial index API or
-release is available yet. This repository is not ready for DUB publication.
+**Status:** RTreeX M1/M2 implementation in qualification; **not yet released**
+or published to DUB. The API can change before the first public release.
 
 ## Purpose
 
@@ -15,25 +15,51 @@ designed for interactive editing, range queries and bulk loading. Dunia
 Other indexes (for example, packed static trees or quadtrees) may be added only
 when there is a concrete consumer need.
 
-## RTreeX: intended scope
+## RTreeX: first dynamic index
 
-- Bounding-box intersection/range queries with deterministic boundary rules.
-- Incremental insert, remove and geometry update.
-- Fast bulk loading for pre-existing data.
-- Compact storage with predictable allocation and lifetime.
-- Caller-owned payloads referenced by stable identifiers or lightweight handles.
-- No GIS, coordinate reference system, OSM or rendering assumptions.
-- Practical performance with DMD and LDC; focus on real workloads.
+The M1/M2 implementation in `spatial_index.rtreex` provides:
 
-**Algorithm selection is not frozen.** R*-tree subtree selection/splitting,
-RBush-inspired OMT bulk loading and compact node pools are candidates, not
-claims about implemented behaviour. See [the roadmap](ROADMAP.md) and
-[ADR-0001](docs/adr/ADR-0001-scope-and-boundaries.md).
+- 2D, closed/inclusive `Bounds2` with `int`, `long`, `float` or `double`.
+- Unique caller-supplied `uint`/`ulong` entry IDs and non-owning payload identity.
+- Insert, remove, update, lookup, clear and visitor-based intersection search.
+- Compact array-backed node pool with slot reuse and root contraction.
+- R*-inspired subtree selection and split (without forced reinsertion).
+- No result-array allocation in the search implementation; results are
+  bounding-box candidates, not exact geometry matches.
+
+**Not yet included:** nearest-neighbor, radial search, OMT bulk loading,
+snapshots, persistence, thread-safe mutation or a static packed index.
+
+The initial contract is documented in
+[ADR-0002](docs/adr/ADR-0002-rtreex-m1-contract.md). The algorithms will be
+qualified on representative editor workloads before release.
+
+### Basic use
+
+```d
+import spatial_index.rtreex : Bounds2, RTreeX;
+
+alias Box = Bounds2!double;
+RTreeX!(double, ulong) index;
+
+assert(index.insert(101, Box(0, 0, 10, 10)));
+size_t visited = index.search(Box(9, 9, 20, 20), (ulong id) {
+    // Process candidate ID. Return false to stop early.
+    return true;
+});
+assert(visited == 1);
+
+assert(index.update(101, Box(20, 20, 30, 30)));
+assert(index.remove(101));
+```
+
+The index does not depend on Dunia, `geo-d` or an OSM schema. Use a thin
+adapter from existing consumer rectangles where necessary.
 
 ## Repository layout
 
 ```text
-source/spatial_index/package.d  public package entry point (no API yet)
+source/spatial_index/package.d  package entry point for RTreeX
 docs/adr/                       architectural decisions
 tests/consumer/                 external DUB consumer smoke test
 .github/workflows/              compiler / release qualification

@@ -1,11 +1,17 @@
 /**
- * Spatial indexing facilities for D.
+ * Reusable spatial indexes for D.
  *
- * This entry point is reserved for qualified public index APIs.
- * The repository is currently in the bootstrap phase: no public
- * spatial-index implementation has been admitted yet.
+ * The first implementation is $(D RTreeX), a dynamic index of copied
+ * two-dimensional bounding boxes and caller-owned IDs. The package carries
+ * no OSM or coordinate reference system assumptions.
  *
- * RTreeX is planned under `spatial_index.rtreex`, subject to its
- * documented ownership, update and query contracts.
+ * Examples:
+ * ---
+ * import spatial_index;
+ * RTreeX!(double, ulong) tree;
+ * assert(tree.insert(7, Bounds2!double(0, 0, 1, 1)));
+ * ---
  */
 module spatial_index;
+
+public import spatial_index.rtreex : Bounds2, RTreeX;
