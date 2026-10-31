@@ -40,7 +40,7 @@ void main()
         Item(100, Box(0, 0, 1, 1)),
         Item(101, Box(5, 5, 6, 6)),
     ];
-    assert(tree.bulkLoad(newData));
+    assert(tree.replaceAll(newData));
     assert(tree.length == 2);
     assert(tree.search(Box(1, 1, 1, 1), (ulong id) {
         return true;
@@ -65,7 +65,7 @@ void main()
         { 3, B(0, 0, 5, 5) },
         { 4, B(10, 10, 11, 11) },
     ];
-    assert(index.bulkLoad(items));
+    assert(index.replaceAll(items));
     size_t seen;
     auto count = index.search(B(1, 1, 2, 2), (uint id) @safe {
         ++seen;
