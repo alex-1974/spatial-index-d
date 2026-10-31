@@ -168,7 +168,7 @@ if (is(T == int) || is(T == long) ||
      *
      * Returns: `true` for a present ID, otherwise `false` (out unchanged).
      */
-    bool tryGetBounds(Id id, out Box bounds) const
+    bool tryGetBounds(Id id, ref Box bounds) const
     {
         auto found = id in _boxes;
         if (found is null)
@@ -826,7 +826,8 @@ unittest
         assert(actual == expected);
     }
 
-    foreach (id, box; reference)
-        assert(tree.remove(id));
+    foreach (id; 0u .. 400u)
+        if ((id in reference) !is null)
+            assert(tree.remove(id));
     assert(tree.empty && tree._checkInvariants());
 }
