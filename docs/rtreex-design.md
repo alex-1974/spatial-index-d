@@ -8,7 +8,7 @@ The accepted public contract is
 [ADR-0002](adr/ADR-0002-rtreex-m1-contract.md).
 
 - `RTreeX!(T, Id = ulong, MaxEntries = 16)`
-- `Bounds2!T(minX, minY, maxX, maxY)`
+- `Bounds2!T(minX, minY, maxX, maxY)`; default `.init` is invalid/empty.
 - `insert(id, bounds)`, `remove(id)`, `update(id, bounds)`
 - `tryGetBounds(id, ref bounds)`, `search(bounds, visitor)`
 - `length`, `empty` and `clear`
