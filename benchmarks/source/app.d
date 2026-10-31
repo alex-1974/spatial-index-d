@@ -1,6 +1,6 @@
 /**
  * Minimal release-build comparison of incremental insertion and packed
- * bulkLoad. Not a research benchmark: results are workload/hardware specific.
+ * replaceAll. Not a research benchmark: results are workload/hardware specific.
  *
  * Usage (from benchmarks/):
  *   dub run --build=release --compiler=ldc2 -- 100000 urban
@@ -20,7 +20,7 @@ import std.file : exists;
 import std.stdio : File, writeln, writefln;
 import std.string : split, strip;
 
-alias Index = RTreeX!(double, ulong, 16);
+alias Index = RTreeX!(double, ulong);
 alias Box = Bounds2!double;
 alias Item = Index.Item;
 
@@ -100,8 +100,6 @@ private struct Result
     double queryMs;
     double updateMs;
     size_t gcBytes;
-    size_t minimumBytes;
-    size_t nodeSlots;
     ulong checksum;
     size_t hitCount;
 }
@@ -115,7 +113,7 @@ private Result run(const(Item)[] data, string kind, bool bulk)
     auto start = MonoTime.currTime;
     if (bulk)
     {
-        enforce(tree.bulkLoad(data), "packed bulkLoad rejected valid corpus");
+        enforce(tree.replaceAll(data), "packed replaceAll rejected valid corpus");
     }
     else
     {
@@ -125,7 +123,6 @@ private Result run(const(Item)[] data, string kind, bool bulk)
     const double buildMs = ms(start);
     auto after = GC.stats.usedSize;
     const size_t gcBytes = after > before ? after - before : 0;
-    const auto capacity = tree.storageStats;
 
     size_t hits = 0;
     ulong checksum = 0;
@@ -166,9 +163,7 @@ private Result run(const(Item)[] data, string kind, bool bulk)
     }
     const double updateMs = ms(start);
 
-    return Result(buildMs, queryMs, updateMs, gcBytes,
-                  capacity.minimumBytes, capacity.nodeSlots,
-                  checksum, hits);
+    return Result(buildMs, queryMs, updateMs, gcBytes, checksum, hits);
 }
 
 void main(string[] args)
@@ -191,13 +186,11 @@ void main(string[] args)
     enforce(incremental.checksum == packed.checksum,
             "query ID checksums differ between construction methods");
 
-    writeln("method,workload,entries,build_ms,query200_ms,update_ms,gc_used_delta_bytes,minimum_structural_bytes,node_slots,hits,checksum");
-    writefln("incremental,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s,%s,%s", kind, data.length,
+    writeln("method,workload,entries,build_ms,query200_ms,update_ms,gc_used_delta_bytes,hits,checksum");
+    writefln("incremental,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s", kind, data.length,
              incremental.buildMs, incremental.queryMs, incremental.updateMs,
-             incremental.gcBytes, incremental.minimumBytes,
-             incremental.nodeSlots, incremental.hitCount, incremental.checksum);
-    writefln("omt,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s,%s,%s", kind, data.length,
+             incremental.gcBytes, incremental.hitCount, incremental.checksum);
+    writefln("omt,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s", kind, data.length,
              packed.buildMs, packed.queryMs, packed.updateMs,
-             packed.gcBytes, packed.minimumBytes,
-             packed.nodeSlots, packed.hitCount, packed.checksum);
+             packed.gcBytes, packed.hitCount, packed.checksum);
 }
