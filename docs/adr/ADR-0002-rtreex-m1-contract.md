@@ -21,15 +21,15 @@
 
 ## Identity and storage
 
-- `RTreeX!(T, Id, MaxEntries)`; `Id` is `uint` or `ulong` in M2;
-  default `ulong`. `MaxEntries` is compile-time 4..64, default 16.
+- `RTreeX!(T, Id = ulong)`; `Id` is `uint` or `ulong`.
+  Node layout and tuning parameters are internal and chosen by the library.
 - Unique, caller-provided IDs. No sentinel ID is reserved.
 - Index owns **only** copied bounds, IDs, tree nodes and lookup structures.
   It never owns or retains a geometry object pointer.
 - Duplicate insertion, nonexistent deletion, invalid insertion/update: return
   `false` with no logical change.
 - `update(id, bounds)` returns `true` for an existing unchanged box.
-- `tryGetBounds(id, out bounds)` allows inspection of the stored box.
+- `tryGetBounds(id, ref bounds)` allows inspection of the stored box.
 - Struct copying is disabled: accidental copies must not alias mutable
   ownership. `clear()` restores empty state; the GC can reclaim backing
   storage after the index is discarded.
@@ -70,8 +70,8 @@
   selects the axis using total margins and then the distribution using
   overlap followed by total area. This is a practical R*-style baseline;
   **forced reinsertion is deliberately not implemented in M2**.
-- Median/OMT mass loading is separately scheduled for M3; repeated `insert`
-  is the only initial construction path.
+- From M3 onward, `replaceAll(items)` efficiently replaces the complete
+  index; its internal packed construction is not part of the public API.
 
 ## Verification
 
