@@ -10,7 +10,7 @@ import spatial_index.rtreex;
 void main()
 {
     alias Box = Bounds2!double;
-    RTreeX!(double, ulong) tree;
+    RTreeX!double tree;
 
     assert(tree.insert(15, Box(0, 0, 10, 10)));
     assert(tree.insert(16, Box(50, 50, 60, 60)));
@@ -37,7 +37,7 @@ void main()
     assert(tree.remove(16));
     assert(tree.empty);
 
-    alias Item = RTreeX!(double, ulong).Item;
+    alias Item = RTreeX!double.Item;
     Item[] newData = [
         Item(100, Box(0, 0, 1, 1)),
         Item(101, Box(5, 5, 6, 6)),
