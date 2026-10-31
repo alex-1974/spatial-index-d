@@ -1097,3 +1097,111 @@ static assert(!__traits(compiles, {
 }));
 static assert(!__traits(compiles, RTreeX!(double, long).init));
 static assert(!__traits(compiles, Bounds2!string.init));
+
+
+unittest
+{
+    // M3: empty replacement, validity and uniqueness are transactional.
+    alias Index = RTreeX!(double, uint, 4);
+    alias Box = Bounds2!double;
+    Index tree;
+    assert(tree.insert(99, Box(1, 1, 2, 2)));
+
+    Index.Item[] duplicates = [
+        Index.Item(3, Box(0, 0, 1, 1)),
+        Index.Item(3, Box(3, 3, 4, 4))
+    ];
+    assert(!tree.bulkLoad(duplicates));
+    assert(tree.length == 1);
+    Box stored;
+    assert(tree.tryGetBounds(99, stored) && stored == Box(1, 1, 2, 2));
+
+    Index.Item[] invalid = [
+        Index.Item(7, Box(1, 1, 1, 1)),
+        Index.Item(8, Box(double.nan, 0, 1, 2))
+    ];
+    assert(!tree.bulkLoad(invalid));
+    assert(tree.length == 1 && tree._checkInvariants());
+
+    Index.Item[] entries = [
+        Index.Item(2, Box(0, 0, 10, 10)),
+        Index.Item(0, Box(10, 10, 12, 12)),
+        Index.Item(8, Box(-2, -2, -2, -2)),
+        Index.Item(7, Box(4, 4, 5, 5)),
+        Index.Item(9, Box(100, 100, 200, 200))
+    ];
+    assert(tree.bulkLoad(entries));
+    assert(tree.length == entries.length && tree._checkInvariants());
+    assert(!tree.tryGetBounds(99, stored));
+    assert(tree.search(Box(10, 10, 10, 10), (uint id) {
+        return true;
+    }) == 2);
+    assert(tree.update(7, Box(11, 11, 11, 11)));
+    assert(tree.remove(0));
+    assert(tree._checkInvariants());
+
+    // Bulk loading must copy values and never retain caller memory.
+    entries[0] = Index.Item(999, Box(9, 9, 9, 9));
+    assert(tree.tryGetBounds(2, stored) && stored == Box(0, 0, 10, 10));
+
+    assert(tree.bulkLoad(cast(const(Index.Item)[]) null));
+    assert(tree.empty && tree._checkInvariants());
+}
+
+unittest
+{
+    // M3: packed hierarchy versus independent linear-scan oracle.
+    // Covers all sizes across multiple full/partial levels and edit sequences.
+    alias Index = RTreeX!(int, ulong, 16);
+    alias Box = Bounds2!int;
+    foreach (n; [1, 15, 16, 17, 31, 32, 33, 255, 256, 257, 1024, 4097])
+    {
+        Index tree;
+        Index.Item[] items;
+        items.length = n;
+        foreach (i; 0 .. n)
+        {
+            const int x = cast(int)(i % 47) * 5 - 115;
+            const int y = cast(int)(i / 47) * 3 - 115;
+            // A mixture of points, horizontal lines, and overlapping areas.
+            const int dx = i % 13 == 0 ? 300 : cast(int)(i % 11);
+            const int dy = i % 7 == 0 ? 0 : cast(int)(i % 17);
+            items[i] = Index.Item(cast(ulong)i, Box(x, y, x + dx, y + dy));
+        }
+        assert(tree.bulkLoad(items));
+        assert(tree.length == n && tree._checkInvariants());
+
+        foreach (q; 0 .. 50)
+        {
+            const Box query = Box(q * 11 - 170, q * 3 - 145,
+                                  q * 11 - 150, q * 3 - 100);
+            size_t expected = 0;
+            foreach (item; items)
+                if (item.bounds.intersects(query)) ++expected;
+
+            bool[ulong] found;
+            auto count = tree.search(query, (ulong id) {
+                assert((id in found) is null);
+                found[id] = true;
+                assert(items[cast(size_t) id].bounds.intersects(query));
+                return true;
+            });
+            assert(count == expected);
+        }
+
+        if (n > 16)
+        {
+            foreach (i; 0 .. n)
+            {
+                if (i % 3 == 0)
+                    assert(tree.remove(cast(ulong) i));
+                else if (i % 3 == 1)
+                    assert(tree.update(cast(ulong) i,
+                        Box(2000, cast(int) i, 2005, cast(int) i + 1)));
+            }
+            assert(tree._checkInvariants());
+        }
+        assert(tree.bulkLoad(items));
+        assert(tree.length == n && tree._checkInvariants());
+    }
+}
