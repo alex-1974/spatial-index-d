@@ -22,13 +22,11 @@ The M1–M3 implementation in `spatial_index.rtreex` provides:
 
 - 2D, closed/inclusive `Bounds2` with `int`, `long`, `float` or `double`.
 - Unique caller-supplied `uint`/`ulong` entry IDs and non-owning payload identity.
-- Insert, remove, update, lookup, clear and visitor-based intersection search.
-- Validated, replacement-style `bulkLoad(Item[])` using balanced
-  OMT-inspired spatial grouping, with no retained caller buffers.
+- Insert, remove, update, lookup, clear and simple `search(bounds)` results.
+- Optional `search(bounds, visitor)` for allocation-free result traversal.
+- `replaceAll(Item[])` to replace the complete content efficiently;
+  the input remains owned by the caller.
 - Compact array-backed node pool with slot reuse and root contraction.
-- `storageStats` for node slots and a clearly labeled structural memory
-  lower bound (not total RAM usage).
-- R*-inspired subtree selection and split (without forced reinsertion).
 - No result-array allocation in the search implementation; results are
   bounding-box candidates, not exact geometry matches.
 
@@ -49,12 +47,15 @@ imply a release.
 import spatial_index.rtreex : Bounds2, RTreeX;
 
 alias Box = Bounds2!double;
-RTreeX!(double, ulong) index;
+RTreeX!double index;
 
 assert(index.insert(101, Box(0, 0, 10, 10)));
+auto matchingIDs = index.search(Box(9, 9, 20, 20));
+assert(matchingIDs.length == 1 && matchingIDs[0] == 101);
+
+// Optional: avoid allocating results when querying repeatedly.
 size_t visited = index.search(Box(9, 9, 20, 20), (ulong id) {
-    // Process candidate ID. Return false to stop early.
-    return true;
+    return true;  // Return false to stop early.
 });
 assert(visited == 1);
 
@@ -62,12 +63,12 @@ assert(index.update(101, Box(20, 20, 30, 30)));
 assert(index.remove(101));
 
 // Rebuild from a complete batch of copied entries:
-alias Item = RTreeX!(double, ulong).Item;
+alias Item = RTreeX!double.Item;
 Item[] batch = [
     Item(101, Box(10, 10, 20, 20)),
     Item(102, Box(100, 100, 101, 101)),
 ];
-assert(index.bulkLoad(batch));
+assert(index.replaceAll(batch));  // Replaces every existing item.
 assert(index.length == 2);
 ```
 

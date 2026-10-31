@@ -10,7 +10,7 @@ import spatial_index.rtreex;
 void main()
 {
     alias Box = Bounds2!double;
-    RTreeX!(double, ulong) tree;
+    RTreeX!double tree;
 
     assert(tree.insert(15, Box(0, 0, 10, 10)));
     assert(tree.insert(16, Box(50, 50, 60, 60)));
@@ -22,6 +22,8 @@ void main()
         return true;
     });
     assert(visited == 1 && selected.length == 1 && selected[0] == 15);
+    auto found = tree.search(Box(5, 5, 12, 12));
+    assert(found.length == 1 && found[0] == 15);
 
     assert(tree.update(15, Box(100, 100, 110, 110)));
     assert(tree.search(Box(5, 5, 12, 12), (ulong id) {
@@ -35,12 +37,12 @@ void main()
     assert(tree.remove(16));
     assert(tree.empty);
 
-    alias Item = RTreeX!(double, ulong).Item;
+    alias Item = RTreeX!double.Item;
     Item[] newData = [
         Item(100, Box(0, 0, 1, 1)),
         Item(101, Box(5, 5, 6, 6)),
     ];
-    assert(tree.bulkLoad(newData));
+    assert(tree.replaceAll(newData));
     assert(tree.length == 2);
     assert(tree.search(Box(1, 1, 1, 1), (ulong id) {
         return true;
@@ -65,7 +67,7 @@ void main()
         { 3, B(0, 0, 5, 5) },
         { 4, B(10, 10, 11, 11) },
     ];
-    assert(index.bulkLoad(items));
+    assert(index.replaceAll(items));
     size_t seen;
     auto count = index.search(B(1, 1, 2, 2), (uint id) @safe {
         ++seen;
@@ -76,3 +78,17 @@ void main()
     assert(index.remove(3));
     assert(index.remove(4));
 }
+
+
+// Keep implementation details out of the consumer's public surface.
+// Both checks compile when the forbidden spellings are inaccessible.
+static assert(!__traits(compiles, RTreeX!(double, ulong, 4).init));
+static assert(!__traits(compiles, {
+    RTreeX!(double, ulong) index;
+    auto diagnostic = index.storageStats;
+}));
+static assert(!__traits(compiles, {
+    RTreeX!(double, ulong) index;
+    RTreeX!(double, ulong).Item[] entries;
+    index.bulkLoad(entries);
+}));
