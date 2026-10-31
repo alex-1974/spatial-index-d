@@ -15,7 +15,9 @@ import spatial_index.rtreex : Bounds2, RTreeX;
 import core.memory : GC;
 import core.time : MonoTime;
 import std.conv : to;
-import std.stdio : writeln, writefln;
+import std.file : exists;
+import std.stdio : File, writeln, writefln;
+import std.string : split, strip;
 
 alias Index = RTreeX!(double, ulong, 16);
 alias Box = Bounds2!double;
@@ -63,6 +65,34 @@ private Item[] workload(size_t n, string kind)
     return items;
 }
 
+/**
+ * Read a CSV of actual OSM-derived boxes: id,minX,minY,maxX,maxY.
+ * CSV metadata lines starting with # are ignored; nonempty malformed rows
+ * are rejected. This is benchmark-only code, not a spatial-index dependency.
+ */
+private Item[] readItems(string path)
+{
+    import std.exception : enforce;
+    enforce(exists(path), "OSM-derived box corpus not found: " ~ path);
+    auto file = File(path, "r");
+    Item[] entries;
+    foreach (line; file.byLineCopy())
+    {
+        auto value = strip(line);
+        if (value.length == 0 || value[0] == '#')
+            continue;
+        auto parts = split(value, ",");
+        enforce(parts.length == 5, "Expected 5 CSV columns in: " ~ value);
+        const ulong id = to!ulong(parts[0]);
+        const auto box = Box(to!double(parts[1]), to!double(parts[2]),
+                             to!double(parts[3]), to!double(parts[4]));
+        enforce(box.isValid(), "Invalid box in: " ~ value);
+        entries ~= Item(id, box);
+    }
+    enforce(entries.length != 0, "Empty corpus");
+    return entries;
+}
+
 private struct Result
 {
     double buildMs;
@@ -95,15 +125,24 @@ private Result run(const(Item)[] data, string kind, bool bulk)
 
     size_t hits = 0;
     ulong checksum = 0;
-    const double domain = kind == "sparse" ? 60000 :
-        kind == "long" ? 17000 : 4000;
+    Box domain = data[0].bounds;
+    foreach (item; data[1 .. $])
+    {
+        if (item.bounds.minX < domain.minX) domain.minX = item.bounds.minX;
+        if (item.bounds.minY < domain.minY) domain.minY = item.bounds.minY;
+        if (item.bounds.maxX > domain.maxX) domain.maxX = item.bounds.maxX;
+        if (item.bounds.maxY > domain.maxY) domain.maxY = item.bounds.maxY;
+    }
+    const double width = domain.maxX - domain.minX;
+    const double height = domain.maxY - domain.minY;
+    const double spanX = width / 100.0;
+    const double spanY = height / 100.0;
     start = MonoTime.currTime;
     foreach (i; 0 .. 200)
     {
-        const double x = cast(double) ((i * 983) % cast(size_t) domain);
-        const double y = cast(double) ((i * 271) % cast(size_t) domain);
-        const double span = kind == "sparse" ? 200 : 80;
-        auto q = Box(x, y, x + span, y + span);
+        const double x = domain.minX + (cast(double)((i * 983) % 997) / 997) * width;
+        const double y = domain.minY + (cast(double)((i * 271) % 991) / 991) * height;
+        auto q = Box(x, y, x + spanX, y + spanY);
         hits += tree.search(q, (ulong id) {
             checksum += id * 1469598103934665603UL + 1;
             return true;
@@ -129,9 +168,14 @@ void main(string[] args)
 {
     const size_t n = args.length > 1 ? to!size_t(args[1]) : 10_000;
     const string kind = args.length > 2 ? args[2] : "urban";
-    assert(kind == "urban" || kind == "sparse" || kind == "long");
+    assert(kind == "urban" || kind == "sparse" || kind == "long" ||
+           kind == "osm");
     assert(n > 0);
-    auto data = workload(n, kind);
+    assert(kind != "osm" || args.length > 3);
+    auto data = kind == "osm" ? readItems(args[3]) : workload(n, kind);
+    // For OSM data, a positive n limits the recorded fixture uniformly.
+    if (kind == "osm" && n < data.length)
+        data.length = n;
 
     const auto incremental = run(data, kind, false);
     const auto packed = run(data, kind, true);
@@ -139,10 +183,10 @@ void main(string[] args)
     assert(incremental.checksum == packed.checksum);
 
     writeln("method,workload,entries,build_ms,query200_ms,update_ms,gc_used_delta_bytes,hits,checksum");
-    writefln("incremental,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s", kind, n,
+    writefln("incremental,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s", kind, data.length,
              incremental.buildMs, incremental.queryMs, incremental.updateMs,
              incremental.gcBytes, incremental.hitCount, incremental.checksum);
-    writefln("omt,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s", kind, n,
+    writefln("omt,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s", kind, data.length,
              packed.buildMs, packed.queryMs, packed.updateMs,
              packed.gcBytes, packed.hitCount, packed.checksum);
 }
