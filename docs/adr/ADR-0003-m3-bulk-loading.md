@@ -12,8 +12,8 @@ without incurring a split per overflow and excessive bounding-box overlap.
 
 ## Decision
 
-Add a **single** `bulkLoad(scope const(Item)[])` API that *replaces* the
-current index. Its elements are copied; the index never retains the
+Add a **single** `replaceAll(scope const(Item)[])` API that *replaces* the
+current index. The name describes consumer-visible behavior, not algorithms. Its elements are copied; the index never retains the
 consumer-provided slice or underlying geometry.
 
 - Validate every item for finite, ordered bounds and unique IDs **before**
@@ -68,10 +68,9 @@ Two independent workloads are required:
 The benchmark uses DMD and LDC release builds and compares incremental
 insertion against packed loading on the same dataset and runner. It records
 build time, 200 query time, up to 1000 update times, GC allocation-used delta
-and result IDs (count plus commutative checksum). The `storageStats`
-snapshot additionally provides node slots and a lower bound from occupied
-node pool and raw lookup values, so memory comparison need not rely on
-the GC alone. This is practical performance evidence, not microbenchmark
+and result IDs (count plus commutative checksum). An internal storage
+snapshot was used for M3 engineering measurements. It is deliberately not
+part of the public API. This is practical performance evidence, not microbenchmark
 science.
 
 **Caveats:** Structural lower bounds exclude associative-array overhead,
