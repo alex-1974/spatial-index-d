@@ -738,7 +738,9 @@ unittest
     RTreeX!(double, ulong, 4) tree;
     assert(tree.empty);
     assert(!tree.insert(1, Box(10, 0, 1, 2)));
+    assert(!tree.insert(1, Box(double.infinity, 0, 1, 2)));
     assert(tree.insert(1, Box(0, 0, 1, 1)));
+    assert(!tree.update(1, Box(double.nan, 0, 1, 2)));
     assert(!tree.insert(1, Box(2, 2, 3, 3)));
     assert(tree.insert(0, Box(1, 1, 1, 1)));
     assert(tree._checkInvariants());
@@ -763,6 +765,9 @@ unittest
     assert(tree.tryGetBounds(1, value));
     assert(value == Box(10, 10, 11, 11));
     assert(!tree.update(987, Box(0, 0, 1, 1)));
+    Box unchanged = Box(7, 7, 9, 9);
+    assert(!tree.tryGetBounds(987, unchanged));
+    assert(unchanged == Box(7, 7, 9, 9));
     assert(!tree.remove(987));
     assert(tree.remove(1));
     assert(tree.remove(0));
@@ -909,3 +914,11 @@ unittest
     assert(tree._checkInvariants());
     assert(tree.length == reference.length);
 }
+
+// M1 compile-negative ownership and template-domain contracts.
+static assert(!__traits(compiles, {
+    RTreeX!(double, ulong) original;
+    RTreeX!(double, ulong) accidentalCopy = original;
+}));
+static assert(!__traits(compiles, RTreeX!(double, long).init));
+static assert(!__traits(compiles, Bounds2!string.init));
