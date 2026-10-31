@@ -7,10 +7,10 @@
 The accepted public contract is
 [ADR-0002](adr/ADR-0002-rtreex-m1-contract.md).
 
-- `RTreeX!(T, Id = ulong, MaxEntries = 16)`
+- `RTreeX!(T, Id = ulong)`; node capacity is an internal detail
 - `Bounds2!T(minX, minY, maxX, maxY)`; default `.init` is invalid/empty.
 - `insert(id, bounds)`, `remove(id)`, `update(id, bounds)`
-- `bulkLoad(scope const(Item)[])` replaces the entire index after validation
+- `replaceAll(scope const(Item)[])` replaces the entire index after validation
 - `tryGetBounds(id, ref bounds)`, `search(bounds, visitor)`
 - `length`, `empty` and `clear`
 
@@ -105,7 +105,8 @@ independent STR/Hilbert index variants or forced reinsertion.
 - DMD 2.111 and LDC 1.41 performed the comparisons; see
   `docs/m3-performance-2026-10-31.md`, CSV artifacts and
   `benchmarks/README.md`.
-- `storageStats` exposes node slots and a clear structural byte lower bound.
+- Internal diagnostics measure node slots and structural storage without
+  expanding the consumer API.
 - GC allocation deltas are indicative, not reliable exact index footprint.
 
 See [ADR-0003](adr/ADR-0003-m3-bulk-loading.md).
