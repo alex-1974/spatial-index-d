@@ -68,11 +68,15 @@ Two independent workloads are required:
 The benchmark uses DMD and LDC release builds and compares incremental
 insertion against packed loading on the same dataset and runner. It records
 build time, 200 query time, up to 1000 update times, GC allocation-used delta
-and result IDs (count plus commutative checksum). This is practical
-performance evidence, not microbenchmark science.
+and result IDs (count plus commutative checksum). The `storageStats`
+snapshot additionally provides node slots and a lower bound from occupied
+node pool and raw lookup values, so memory comparison need not rely on
+the GC alone. This is practical performance evidence, not microbenchmark
+science.
 
-**Caveats:** GC deltas are rough process-level memory indicators, not exact
-per-index resident memory. OSM data are WGS84 lon/lat (not projected);
+**Caveats:** Structural lower bounds exclude associative-array overhead,
+runtime allocation capacities and garbage-collector metadata. GC deltas are
+rough process-level memory indicators, not exact per-index resident memory. OSM data are WGS84 lon/lat (not projected);
 distance/metric nearest-neighbor performance is not tested. CI hardware is
 shared and samples are not repeated confidence intervals.
 
