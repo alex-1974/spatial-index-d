@@ -11,7 +11,8 @@ The accepted public contract is
 - `Bounds2!T(minX, minY, maxX, maxY)`; default `.init` is invalid/empty.
 - `insert(id, bounds)`, `remove(id)`, `update(id, bounds)`
 - `replaceAll(scope const(Item)[])` replaces the entire index after validation
-- `tryGetBounds(id, ref bounds)`, `search(bounds, visitor)`
+- `tryGetBounds(id, ref bounds)`; `search(bounds)` returns IDs
+- `search(bounds, visitor)` visits matches without an allocated result array
 - `length`, `empty` and `clear`
 
 Only 2D bounding boxes are included. Search returns broad-phase
