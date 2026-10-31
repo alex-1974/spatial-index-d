@@ -35,3 +35,20 @@ void main()
     assert(tree.remove(16));
     assert(tree.empty);
 }
+
+
+/** Compile-check that normal indexing is available to @safe D consumers. */
+@safe void safeConsumer()
+{
+    alias B = Bounds2!int;
+    RTreeX!(int, uint) index;
+    assert(index.insert(3, B(0, 0, 5, 5)));
+    size_t seen;
+    auto count = index.search(B(1, 1, 2, 2), (uint id) @safe {
+        ++seen;
+        return true;
+    });
+    assert(count == 1 && seen == 1);
+    assert(index.update(3, B(4, 4, 6, 6)));
+    assert(index.remove(3));
+}
