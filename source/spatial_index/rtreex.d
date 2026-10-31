@@ -92,7 +92,8 @@ if (is(T == int) || is(T == long) ||
  * Params:
  *   T = `int`, `long`, `float` or `double` coordinate type.
  *   Id = Unsigned `uint` or `ulong` caller identity type.
- *   MaxEntries = Maximum entries per node (4..64, default 16).
+ *   Internal node size is selected automatically. No tree-layout tuning is
+ *   required for normal use.
  *
  * Examples:
  * ---
@@ -112,7 +113,11 @@ if (is(T == int) || is(T == long) ||
  * assert(tree.remove(42));
  * ---
  */
-struct RTreeX(T, Id = ulong, size_t MaxEntries = 16)
+alias RTreeX(T, Id = ulong) = RTreeXCore!(T, Id, 16);
+
+// Internal R-tree implementation: tuning of node occupancy and split policy
+// is not part of the public consumer contract.
+private struct RTreeXCore(T, Id = ulong, size_t MaxEntries = 16)
 if (is(T == int) || is(T == long) ||
     is(T == float) || is(T == double))
 {
@@ -161,7 +166,7 @@ if (is(T == int) || is(T == long) ||
      * It does not count GC or AA metadata, allocator capacity, or temporary
      * construction buffers, and is not a resident-memory measurement.
      */
-    struct StorageStats
+    private struct StorageStats
     {
         /// Total node pool slots ever allocated since the last clear/rebuild.
         size_t nodeSlots;
@@ -200,7 +205,7 @@ if (is(T == int) || is(T == long) ||
      * Returns: Snapshot of node pool capacity and minimum bytes. This
      *   excludes runtime allocator metadata and is not full process RSS.
      */
-    @property StorageStats storageStats() const
+    private @property StorageStats _storageStats() const
     {
         return StorageStats(
             _nodes.length,
@@ -250,13 +255,12 @@ if (is(T == int) || is(T == long) ||
 
 
     /**
-     * Replace all indexed entries with a packed, spatially organized tree.
+     * Replace every indexed item with the supplied items.
      *
      * The caller's Item array remains unchanged and can be discarded after
      * the call. This method accepts any number of entries, including zero,
-     * and rebuilds the tree in O(n log n) expected sorting time rather than
-     * repeatedly calling insert. A two-axis, overlap-minimizing top-down
-     * (OMT-inspired) grouping heuristic is applied at every tree level.
+     * and rebuilds the index efficiently instead of repeatedly inserting
+     * items. The implementation chooses the internal build algorithm.
      *
      * All input is validated before the current tree is changed. The method
      * returns false for invalid boxes or duplicate IDs and leaves the prior
@@ -276,18 +280,18 @@ if (is(T == int) || is(T == long) ||
      *     { 11, B(0, 0, 5, 5) },
      *     { 12, B(8, 8, 9, 9) }
      * ];
-     * assert(tree.bulkLoad(items));
+     * assert(tree.replaceAll(items));
      * assert(tree.length == 2);
      * assert(tree.search(B(1, 1, 2, 2), (uint id) {
      *     return true;
      * }) == 1);
      * ---
      */
-    bool bulkLoad(scope const(Item)[] items)
+    bool replaceAll(scope const(Item)[] items)
     {
         // Build in detached storage, so rejected input cannot destroy the
         // previous tree. The new pool/map are adopted only on success.
-        RTreeX!(T, Id, MaxEntries) candidate;
+        RTreeXCore!(T, Id, MaxEntries) candidate;
         Entry[] level;
         level.length = items.length;
 
@@ -944,7 +948,7 @@ unittest
     assert(!Box(double.nan, 0, 1, 1).isValid());
     assert(!Box(double.infinity, 0, 1, 1).isValid());
 
-    RTreeX!(double, ulong, 4) tree;
+    RTreeXCore!(double, ulong, 4) tree;
     assert(tree.empty);
     assert(!tree.insert(1, Box(10, 0, 1, 2)));
     assert(!tree.insert(1, Box(double.infinity, 0, 1, 2)));
@@ -989,7 +993,7 @@ unittest
 {
     // Exercise overflow, splits, underflow, root shrink and slot recycling.
     alias Box = Bounds2!int;
-    RTreeX!(int, uint, 8) tree;
+    RTreeXCore!(int, uint, 8) tree;
     Box[uint] reference;
 
     foreach (i; 0u .. 400u)
@@ -1052,7 +1056,7 @@ unittest
     // Deterministic mixed-operation differential test. The reference map
     // deliberately does not reuse the tree's traversal or split algorithms.
     alias Box = Bounds2!int;
-    RTreeX!(int, ulong, 4) tree;
+    RTreeXCore!(int, ulong, 4) tree;
     Box[ulong] reference;
     uint state = 0xC001D00Du;
 
@@ -1136,7 +1140,7 @@ static assert(!__traits(compiles, Bounds2!string.init));
 unittest
 {
     // M3: empty replacement, validity and uniqueness are transactional.
-    alias Index = RTreeX!(double, uint, 4);
+    alias Index = RTreeXCore!(double, uint, 4);
     alias Box = Bounds2!double;
     Index tree;
     assert(tree.insert(99, Box(1, 1, 2, 2)));
@@ -1145,7 +1149,7 @@ unittest
         Index.Item(3, Box(0, 0, 1, 1)),
         Index.Item(3, Box(3, 3, 4, 4))
     ];
-    assert(!tree.bulkLoad(duplicates));
+    assert(!tree.replaceAll(duplicates));
     assert(tree.length == 1);
     Box stored;
     assert(tree.tryGetBounds(99, stored) && stored == Box(1, 1, 2, 2));
@@ -1154,7 +1158,7 @@ unittest
         Index.Item(7, Box(1, 1, 1, 1)),
         Index.Item(8, Box(double.nan, 0, 1, 2))
     ];
-    assert(!tree.bulkLoad(invalid));
+    assert(!tree.replaceAll(invalid));
     assert(tree.length == 1 && tree._checkInvariants());
 
     Index.Item[] entries = [
@@ -1164,10 +1168,10 @@ unittest
         Index.Item(7, Box(4, 4, 5, 5)),
         Index.Item(9, Box(100, 100, 200, 200))
     ];
-    assert(tree.bulkLoad(entries));
+    assert(tree.replaceAll(entries));
     assert(tree.length == entries.length && tree._checkInvariants());
-    assert(tree.storageStats.nodeSlots >= 1);
-    assert(tree.storageStats.minimumBytes > 0);
+    assert(tree._storageStats.nodeSlots >= 1);
+    assert(tree._storageStats.minimumBytes > 0);
     assert(!tree.tryGetBounds(99, stored));
     assert(tree.search(Box(10, 10, 10, 10), (uint id) {
         return true;
@@ -1180,7 +1184,7 @@ unittest
     entries[0] = Index.Item(999, Box(9, 9, 9, 9));
     assert(tree.tryGetBounds(2, stored) && stored == Box(0, 0, 10, 10));
 
-    assert(tree.bulkLoad(cast(const(Index.Item)[]) null));
+    assert(tree.replaceAll(cast(const(Index.Item)[]) null));
     assert(tree.empty && tree._checkInvariants());
 }
 
@@ -1188,7 +1192,7 @@ unittest
 {
     // M3: packed hierarchy versus independent linear-scan oracle.
     // Covers all sizes across multiple full/partial levels and edit sequences.
-    alias Index = RTreeX!(int, ulong, 16);
+    alias Index = RTreeXCore!(int, ulong, 16);
     alias Box = Bounds2!int;
     foreach (n; [1, 15, 16, 17, 31, 32, 33, 255, 256, 257, 1024, 4097])
     {
@@ -1204,7 +1208,7 @@ unittest
             const int dy = i % 7 == 0 ? 0 : cast(int)(i % 17);
             items[i] = Index.Item(cast(ulong)i, Box(x, y, x + dx, y + dy));
         }
-        assert(tree.bulkLoad(items));
+        assert(tree.replaceAll(items));
         assert(tree.length == n && tree._checkInvariants());
 
         foreach (q; 0 .. 50)
@@ -1237,7 +1241,7 @@ unittest
             }
             assert(tree._checkInvariants());
         }
-        assert(tree.bulkLoad(items));
+        assert(tree.replaceAll(items));
         assert(tree.length == n && tree._checkInvariants());
     }
 }
