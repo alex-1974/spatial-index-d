@@ -34,6 +34,7 @@ void main()
     assert(tree.remove(15));
     assert(tree.remove(16));
     assert(tree.empty);
+    safeConsumer();
 }
 
 
