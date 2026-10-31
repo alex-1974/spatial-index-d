@@ -153,6 +153,24 @@ if (is(T == int) || is(T == long) ||
         Box bounds;
     }
 
+    /**
+     * Lightweight structural capacity statistics for consumers and benchmarks.
+     *
+     * `minimumBytes` is a **lower bound**: it counts node array slots,
+     * free-list slots, and raw ID/rectangle values in the associative array.
+     * It does not count GC or AA metadata, allocator capacity, or temporary
+     * construction buffers, and is not a resident-memory measurement.
+     */
+    struct StorageStats
+    {
+        /// Total node pool slots ever allocated since the last clear/rebuild.
+        size_t nodeSlots;
+        /// Slots presently available for recycling.
+        size_t freeNodeSlots;
+        /// Lower bound on index storage from visible value sizes.
+        size_t minimumBytes;
+    }
+
     private Node[] _nodes;
     private size_t[] _free;
     private size_t _root = none;
@@ -174,6 +192,21 @@ if (is(T == int) || is(T == long) ||
     @property bool empty() const
     {
         return _size == 0;
+    }
+
+    /**
+     * Inspect node occupancy and the structural memory lower bound.
+     *
+     * Returns: Snapshot of node pool capacity and minimum bytes. This
+     *   excludes runtime allocator metadata and is not full process RSS.
+     */
+    @property StorageStats storageStats() const
+    {
+        return StorageStats(
+            _nodes.length,
+            _free.length,
+            _nodes.length * Node.sizeof + _free.length * size_t.sizeof +
+                _boxes.length * (Id.sizeof + Box.sizeof));
     }
 
     /**
@@ -1133,6 +1166,8 @@ unittest
     ];
     assert(tree.bulkLoad(entries));
     assert(tree.length == entries.length && tree._checkInvariants());
+    assert(tree.storageStats.nodeSlots >= 1);
+    assert(tree.storageStats.minimumBytes > 0);
     assert(!tree.tryGetBounds(99, stored));
     assert(tree.search(Box(10, 10, 10, 10), (uint id) {
         return true;
