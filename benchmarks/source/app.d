@@ -15,6 +15,7 @@ import spatial_index.rtreex : Bounds2, RTreeX;
 import core.memory : GC;
 import core.time : MonoTime;
 import std.conv : to;
+import std.exception : enforce;
 import std.file : exists;
 import std.stdio : File, writeln, writefln;
 import std.string : split, strip;
@@ -112,12 +113,12 @@ private Result run(const(Item)[] data, string kind, bool bulk)
     auto start = MonoTime.currTime;
     if (bulk)
     {
-        assert(tree.bulkLoad(data));
+        enforce(tree.bulkLoad(data), "packed bulkLoad rejected valid corpus");
     }
     else
     {
         foreach (item; data)
-            assert(tree.insert(item.id, item.bounds));
+            enforce(tree.insert(item.id, item.bounds), "incremental insertion failed");
     }
     const double buildMs = ms(start);
     auto after = GC.stats.usedSize;
@@ -156,8 +157,9 @@ private Result run(const(Item)[] data, string kind, bool bulk)
     foreach (i; 0 .. modifications)
     {
         const auto old = data[i].bounds;
-        assert(tree.update(data[i].id, Box(old.minX + 1, old.minY + 1,
-                                          old.maxX + 1, old.maxY + 1)));
+        enforce(tree.update(data[i].id, Box(old.minX + 1, old.minY + 1,
+                                            old.maxX + 1, old.maxY + 1)),
+                "geometry update failed");
     }
     const double updateMs = ms(start);
 
@@ -168,10 +170,10 @@ void main(string[] args)
 {
     const size_t n = args.length > 1 ? to!size_t(args[1]) : 10_000;
     const string kind = args.length > 2 ? args[2] : "urban";
-    assert(kind == "urban" || kind == "sparse" || kind == "long" ||
-           kind == "osm");
-    assert(n > 0);
-    assert(kind != "osm" || args.length > 3);
+    enforce(kind == "urban" || kind == "sparse" || kind == "long" ||
+            kind == "osm", "unknown workload kind");
+    enforce(n > 0, "size must be positive");
+    enforce(kind != "osm" || args.length > 3, "OSM workload needs CSV path");
     auto data = kind == "osm" ? readItems(args[3]) : workload(n, kind);
     // For OSM data, a positive n limits the recorded fixture uniformly.
     if (kind == "osm" && n < data.length)
@@ -179,8 +181,10 @@ void main(string[] args)
 
     const auto incremental = run(data, kind, false);
     const auto packed = run(data, kind, true);
-    assert(incremental.hitCount == packed.hitCount);
-    assert(incremental.checksum == packed.checksum);
+    enforce(incremental.hitCount == packed.hitCount,
+            "query hit counts differ between construction methods");
+    enforce(incremental.checksum == packed.checksum,
+            "query ID checksums differ between construction methods");
 
     writeln("method,workload,entries,build_ms,query200_ms,update_ms,gc_used_delta_bytes,hits,checksum");
     writefln("incremental,%s,%s,%.3f,%.3f,%.3f,%s,%s,%s", kind, data.length,
