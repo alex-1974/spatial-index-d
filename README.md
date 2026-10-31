@@ -23,12 +23,9 @@ The M1–M3 implementation in `spatial_index.rtreex` provides:
 - 2D, closed/inclusive `Bounds2` with `int`, `long`, `float` or `double`.
 - Unique caller-supplied `uint`/`ulong` entry IDs and non-owning payload identity.
 - Insert, remove, update, lookup, clear and visitor-based intersection search.
-- Validated, replacement-style `bulkLoad(Item[])` using balanced
-  OMT-inspired spatial grouping, with no retained caller buffers.
+- `replaceAll(Item[])` to replace the complete content efficiently;
+  the input remains owned by the caller.
 - Compact array-backed node pool with slot reuse and root contraction.
-- `storageStats` for node slots and a clearly labeled structural memory
-  lower bound (not total RAM usage).
-- R*-inspired subtree selection and split (without forced reinsertion).
 - No result-array allocation in the search implementation; results are
   bounding-box candidates, not exact geometry matches.
 
@@ -67,7 +64,7 @@ Item[] batch = [
     Item(101, Box(10, 10, 20, 20)),
     Item(102, Box(100, 100, 101, 101)),
 ];
-assert(index.bulkLoad(batch));
+assert(index.replaceAll(batch));  // Replaces every existing item.
 assert(index.length == 2);
 ```
 
