@@ -37,9 +37,9 @@ if (is(T == int) || is(T == long) ||
     /// Lower y coordinate.
     T minY = T.max;
     /// Upper x coordinate.
-    T maxX = T.min;
+    T maxX = -T.max;
     /// Upper y coordinate.
-    T maxY = T.min;
+    T maxY = -T.max;
 
     /**
      * Whether this rectangle is ordered and finite.
