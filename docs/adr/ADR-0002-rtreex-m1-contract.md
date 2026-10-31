@@ -12,6 +12,8 @@
   coordinate is finite. Negative/empty/inverted bounds or NaN/infinities are
   rejected by mutators and yield zero search results.
 - Zero-width and zero-height bounds are **valid**, including point rectangles.
+- `Bounds2!T.init` is **invalid / empty** by an inverted default coordinate
+  sentinel; `Bounds2!T(0, 0, 0, 0)` explicitly represents the origin point.
 - Intersections are **closed/inclusive**: touching edges count as intersections.
 - Index does not define CRS, map projection, global epsilon or topology.
 - Extremely large finite rectangles remain valid; split heuristics may
