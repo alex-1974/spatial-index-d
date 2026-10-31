@@ -459,6 +459,37 @@ if (is(T == int) || is(T == long) ||
     }
 
     /**
+     * Find the IDs of all items whose bounds intersect the query.
+     *
+     * Results have no guaranteed order. The method allocates an array for
+     * the results; use the two-argument `search(query, visitor)` overload
+     * to avoid allocating a result array in the query path.
+     *
+     * Params:
+     *   query = Rectangle to search (inclusive touching counts).
+     *
+     * Returns: Newly allocated array of matching caller IDs; empty if none.
+     *
+     * Examples:
+     * ---
+     * RTreeX!double index;
+     * alias B = Bounds2!double;
+     * assert(index.insert(4, B(1, 1, 2, 2)));
+     * auto found = index.search(B(0, 0, 5, 5));
+     * assert(found.length == 1 && found[0] == 4);
+     * ---
+     */
+    Id[] search(Box query) const
+    {
+        Id[] found;
+        search(query, (Id id) {
+            found ~= id;
+            return true;
+        });
+        return found;
+    }
+
+    /**
      * Visit all indexed rectangles intersecting `query` until stopped.
      *
      * `visitor` receives the caller ID, returns `true` to continue, or
@@ -964,6 +995,10 @@ unittest
         return true;
     }) == 2);
     assert(found == 2);
+
+    auto results = tree.search(Box(1, 1, 1, 1));
+    assert(results.length == 2);
+    assert(tree.search(Box(500, 500, 600, 600)).length == 0);
 
     assert(tree.search(Box(-1, -1, 4, 4), (ulong id) {
         return false;
