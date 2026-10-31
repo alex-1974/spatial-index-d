@@ -22,7 +22,8 @@ The M1–M3 implementation in `spatial_index.rtreex` provides:
 
 - 2D, closed/inclusive `Bounds2` with `int`, `long`, `float` or `double`.
 - Unique caller-supplied `uint`/`ulong` entry IDs and non-owning payload identity.
-- Insert, remove, update, lookup, clear and visitor-based intersection search.
+- Insert, remove, update, lookup, clear and simple `search(bounds)` results.
+- Optional `search(bounds, visitor)` for allocation-free result traversal.
 - `replaceAll(Item[])` to replace the complete content efficiently;
   the input remains owned by the caller.
 - Compact array-backed node pool with slot reuse and root contraction.
@@ -49,9 +50,12 @@ alias Box = Bounds2!double;
 RTreeX!(double, ulong) index;
 
 assert(index.insert(101, Box(0, 0, 10, 10)));
+auto matchingIDs = index.search(Box(9, 9, 20, 20));
+assert(matchingIDs.length == 1 && matchingIDs[0] == 101);
+
+// Optional: avoid allocating results when querying repeatedly.
 size_t visited = index.search(Box(9, 9, 20, 20), (ulong id) {
-    // Process candidate ID. Return false to stop early.
-    return true;
+    return true;  // Return false to stop early.
 });
 assert(visited == 1);
 
