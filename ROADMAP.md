@@ -44,7 +44,7 @@ The initial dimension is 2D. See `docs/m3-performance-2026-10-31.md`.
 ## M3 — Bulk loading and performance
 
 - [x] Establish repeated insertion as the baseline and implement an
-      OMT-inspired packed `bulkLoad` for complete replacement.
+      OMT-inspired packed `replaceAll` for complete replacement.
 - [x] Assess STR and Hilbert alternatives; defer more implementations without
       a measured consumer requirement (ADR-0003).
 - [x] Compare build/query/update and approximate GC allocations for 10k,
