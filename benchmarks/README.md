@@ -1,7 +1,7 @@
 # RTreeX M3 benchmark
 
 Small, deterministic comparison of **incremental insert** versus
-**OMT-inspired packed bulkLoad**.
+**OMT-inspired packed replaceAll**.
 
 ## Run
 
@@ -28,12 +28,11 @@ does not invoke the full independent correctness suite; CI does that.
 `gc_used_delta_bytes` is the rough change in D GC allocated-used memory over
 construction, *not* an exact footprint. It excludes memory in unmanaged native
 allocators and depends on GC collection/implementation and temporary buffers.
-`minimum_structural_bytes` is a different, explicit lower-bound quantity:
-node pool slot bytes + free-list contents + raw ID/bounds lookup values.
-Divide it by `entries` for the structural **minimum bytes per item**, but
-remember that runtime map buckets and unused allocator capacity are excluded.
-`node_slots` exposes the high-water slot count (including recycled nodes).
-Neither measure equals process RSS.
+The original M3 engineering run also recorded an **internal** structural
+memory lower bound and node-slot count. These are intentionally absent from
+the public RTreeX API and from the streamlined benchmark output. Its values
+remain documented in `docs/m3-performance-2026-10-31.md`.
+Neither that lower bound nor `gc_used_delta_bytes` equals process RSS.
 
 Timing uses a monotonic clock, includes allocator effects and depends on
 hardware/load; compare methods within each run, repeat on the intended XPS.
