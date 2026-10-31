@@ -6,8 +6,9 @@
  * query returns bounding-box candidates, not exact geometry intersections.
  *
  * Internally, RTreeX uses a compact array-backed node pool and R*-inspired
- * split and subtree-selection heuristics. Bulk loading and forced reinsertion
- * are not part of this initial implementation.
+ * split and subtree-selection heuristics. Packed construction uses an
+ * OMT-inspired balanced two-axis group builder. Forced reinsertion is not
+ * part of this implementation.
  *
  * See_Also:
  *   docs/adr/ADR-0002-rtreex-m1-contract.md
@@ -138,6 +139,38 @@ if (is(T == int) || is(T == long) ||
         Entry[MaxEntries + 1] entries;
     }
 
+    /**
+     * One copied rectangle and its stable, caller-owned identifier.
+     *
+     * This is a value-only transfer record; the tree never retains the
+     * caller's Item array. It does not take ownership of application geometry.
+     */
+    struct Item
+    {
+        /// Caller-supplied unique ID.
+        Id id;
+        /// Finite, ordered rectangle to index.
+        Box bounds;
+    }
+
+    /**
+     * Lightweight structural capacity statistics for consumers and benchmarks.
+     *
+     * `minimumBytes` is a **lower bound**: it counts node array slots,
+     * free-list slots, and raw ID/rectangle values in the associative array.
+     * It does not count GC or AA metadata, allocator capacity, or temporary
+     * construction buffers, and is not a resident-memory measurement.
+     */
+    struct StorageStats
+    {
+        /// Total node pool slots ever allocated since the last clear/rebuild.
+        size_t nodeSlots;
+        /// Slots presently available for recycling.
+        size_t freeNodeSlots;
+        /// Lower bound on index storage from visible value sizes.
+        size_t minimumBytes;
+    }
+
     private Node[] _nodes;
     private size_t[] _free;
     private size_t _root = none;
@@ -159,6 +192,21 @@ if (is(T == int) || is(T == long) ||
     @property bool empty() const
     {
         return _size == 0;
+    }
+
+    /**
+     * Inspect node occupancy and the structural memory lower bound.
+     *
+     * Returns: Snapshot of node pool capacity and minimum bytes. This
+     *   excludes runtime allocator metadata and is not full process RSS.
+     */
+    @property StorageStats storageStats() const
+    {
+        return StorageStats(
+            _nodes.length,
+            _free.length,
+            _nodes.length * Node.sizeof + _free.length * size_t.sizeof +
+                _boxes.length * (Id.sizeof + Box.sizeof));
     }
 
     /**
@@ -198,6 +246,163 @@ if (is(T == int) || is(T == long) ||
         _boxes[id] = bounds;
         ++_size;
         return true;
+    }
+
+
+    /**
+     * Replace all indexed entries with a packed, spatially organized tree.
+     *
+     * The caller's Item array remains unchanged and can be discarded after
+     * the call. This method accepts any number of entries, including zero,
+     * and rebuilds the tree in O(n log n) expected sorting time rather than
+     * repeatedly calling insert. A two-axis, overlap-minimizing top-down
+     * (OMT-inspired) grouping heuristic is applied at every tree level.
+     *
+     * All input is validated before the current tree is changed. The method
+     * returns false for invalid boxes or duplicate IDs and leaves the prior
+     * tree untouched in that case. Memory allocation failures can still
+     * throw; no out-of-memory rollback is promised by the public API.
+     *
+     * Params:
+     *   items = Caller-owned items with unique IDs and valid rectangles.
+     *
+     * Returns: true on success, false for duplicate IDs or invalid bounds.
+     *
+     * Examples:
+     * ---
+     * RTreeX!(double, uint) tree;
+     * alias B = Bounds2!double;
+     * RTreeX!(double, uint).Item[] items = [
+     *     { 11, B(0, 0, 5, 5) },
+     *     { 12, B(8, 8, 9, 9) }
+     * ];
+     * assert(tree.bulkLoad(items));
+     * assert(tree.length == 2);
+     * assert(tree.search(B(1, 1, 2, 2), (uint id) {
+     *     return true;
+     * }) == 1);
+     * ---
+     */
+    bool bulkLoad(scope const(Item)[] items)
+    {
+        // Build in detached storage, so rejected input cannot destroy the
+        // previous tree. The new pool/map are adopted only on success.
+        RTreeX!(T, Id, MaxEntries) candidate;
+        Entry[] level;
+        level.length = items.length;
+
+        foreach (i, item; items)
+        {
+            if (!item.bounds.isValid() ||
+                (item.id in candidate._boxes) !is null)
+                return false;
+
+            candidate._boxes[item.id] = item.bounds;
+            level[i] = Entry(item.bounds, item.id, none);
+        }
+
+        candidate._size = items.length;
+        if (level.length != 0)
+        {
+            bool leaves = true;
+            while (level.length > MaxEntries)
+            {
+                level = candidate._buildLevel(level, leaves);
+                leaves = false;
+            }
+
+            // The final root is exempt from the minimum occupancy rule.
+            const size_t root = candidate._allocateNode(leaves);
+            foreach (i, item; level)
+                candidate._nodes[root].entries[i] = item;
+            candidate._nodes[root].count = level.length;
+            candidate._root = root;
+        }
+
+        _nodes = candidate._nodes;
+        _free = candidate._free;
+        _boxes = candidate._boxes;
+        _root = candidate._root;
+        _size = candidate._size;
+        return true;
+    }
+
+    // OMT-inspired grouping of one tree level: sort by minX into spatial
+    // columns sized by the number of target groups, then sort each column by
+    // minY and pack balanced groups. Every non-root group is >= minimum.
+    private Entry[] _buildLevel(Entry[] level, bool leaves)
+    {
+        import std.algorithm.sorting : sort;
+
+        const size_t groups = (level.length - 1) / MaxEntries + 1;
+        assert(groups >= 2);
+        const size_t smallGroup = level.length / groups;
+        const size_t largerGroups = level.length % groups;
+        assert(smallGroup >= minimum);
+
+        size_t columns = 1;
+        while (columns < groups / columns ||
+               (columns * columns < groups))
+            ++columns;
+
+        // Equal-size columns by *number of groups*. This prevents tiny
+        // underfull leaf groups at slice boundaries.
+        sort!((a, b) => _bulkLess(a, b, 0))(level);
+
+        Entry[] parents;
+        parents.length = groups;
+        size_t first = 0;
+        size_t nextGroup = 0;
+        foreach (column; 0 .. columns)
+        {
+            const size_t columnGroups = groups / columns +
+                (column < groups % columns ? 1 : 0);
+            size_t columnLength = columnGroups * smallGroup;
+            if (nextGroup < largerGroups)
+            {
+                const size_t countLarger = largerGroups - nextGroup;
+                columnLength += countLarger < columnGroups ?
+                    countLarger : columnGroups;
+            }
+
+            sort!((a, b) => _bulkLess(a, b, 1))(
+                level[first .. first + columnLength]);
+
+            size_t offset = first;
+            foreach (g; 0 .. columnGroups)
+            {
+                const size_t groupLength = smallGroup +
+                    (nextGroup < largerGroups ? 1 : 0);
+                const size_t nodeIndex = _allocateNode(leaves);
+                foreach (k; 0 .. groupLength)
+                    _nodes[nodeIndex].entries[k] = level[offset + k];
+                _nodes[nodeIndex].count = groupLength;
+                parents[nextGroup] = Entry(_nodeBounds(nodeIndex),
+                                           Id.init, nodeIndex);
+                offset += groupLength;
+                ++nextGroup;
+            }
+            first += columnLength;
+            assert(offset == first);
+        }
+        assert(first == level.length && nextGroup == groups);
+        return parents;
+    }
+
+    // Deterministic ordering even for equal minimum coordinates; internal
+    // entries with Id.init are distinguished by their child pool index.
+    private static bool _bulkLess(Entry a, Entry b, size_t axis)
+    {
+        const T ak = axis == 0 ? a.box.minX : a.box.minY;
+        const T bk = axis == 0 ? b.box.minX : b.box.minY;
+        if (ak < bk) return true;
+        if (ak > bk) return false;
+        const T as = axis == 0 ? a.box.minY : a.box.minX;
+        const T bs = axis == 0 ? b.box.minY : b.box.minX;
+        if (as < bs) return true;
+        if (as > bs) return false;
+        if (a.id != b.id) return a.id < b.id;
+        return a.child < b.child;
     }
 
     /**
@@ -926,3 +1131,113 @@ static assert(!__traits(compiles, {
 }));
 static assert(!__traits(compiles, RTreeX!(double, long).init));
 static assert(!__traits(compiles, Bounds2!string.init));
+
+
+unittest
+{
+    // M3: empty replacement, validity and uniqueness are transactional.
+    alias Index = RTreeX!(double, uint, 4);
+    alias Box = Bounds2!double;
+    Index tree;
+    assert(tree.insert(99, Box(1, 1, 2, 2)));
+
+    Index.Item[] duplicates = [
+        Index.Item(3, Box(0, 0, 1, 1)),
+        Index.Item(3, Box(3, 3, 4, 4))
+    ];
+    assert(!tree.bulkLoad(duplicates));
+    assert(tree.length == 1);
+    Box stored;
+    assert(tree.tryGetBounds(99, stored) && stored == Box(1, 1, 2, 2));
+
+    Index.Item[] invalid = [
+        Index.Item(7, Box(1, 1, 1, 1)),
+        Index.Item(8, Box(double.nan, 0, 1, 2))
+    ];
+    assert(!tree.bulkLoad(invalid));
+    assert(tree.length == 1 && tree._checkInvariants());
+
+    Index.Item[] entries = [
+        Index.Item(2, Box(0, 0, 10, 10)),
+        Index.Item(0, Box(10, 10, 12, 12)),
+        Index.Item(8, Box(-2, -2, -2, -2)),
+        Index.Item(7, Box(4, 4, 5, 5)),
+        Index.Item(9, Box(100, 100, 200, 200))
+    ];
+    assert(tree.bulkLoad(entries));
+    assert(tree.length == entries.length && tree._checkInvariants());
+    assert(tree.storageStats.nodeSlots >= 1);
+    assert(tree.storageStats.minimumBytes > 0);
+    assert(!tree.tryGetBounds(99, stored));
+    assert(tree.search(Box(10, 10, 10, 10), (uint id) {
+        return true;
+    }) == 2);
+    assert(tree.update(7, Box(11, 11, 11, 11)));
+    assert(tree.remove(0));
+    assert(tree._checkInvariants());
+
+    // Bulk loading must copy values and never retain caller memory.
+    entries[0] = Index.Item(999, Box(9, 9, 9, 9));
+    assert(tree.tryGetBounds(2, stored) && stored == Box(0, 0, 10, 10));
+
+    assert(tree.bulkLoad(cast(const(Index.Item)[]) null));
+    assert(tree.empty && tree._checkInvariants());
+}
+
+unittest
+{
+    // M3: packed hierarchy versus independent linear-scan oracle.
+    // Covers all sizes across multiple full/partial levels and edit sequences.
+    alias Index = RTreeX!(int, ulong, 16);
+    alias Box = Bounds2!int;
+    foreach (n; [1, 15, 16, 17, 31, 32, 33, 255, 256, 257, 1024, 4097])
+    {
+        Index tree;
+        Index.Item[] items;
+        items.length = n;
+        foreach (i; 0 .. n)
+        {
+            const int x = cast(int)(i % 47) * 5 - 115;
+            const int y = cast(int)(i / 47) * 3 - 115;
+            // A mixture of points, horizontal lines, and overlapping areas.
+            const int dx = i % 13 == 0 ? 300 : cast(int)(i % 11);
+            const int dy = i % 7 == 0 ? 0 : cast(int)(i % 17);
+            items[i] = Index.Item(cast(ulong)i, Box(x, y, x + dx, y + dy));
+        }
+        assert(tree.bulkLoad(items));
+        assert(tree.length == n && tree._checkInvariants());
+
+        foreach (q; 0 .. 50)
+        {
+            const Box query = Box(q * 11 - 170, q * 3 - 145,
+                                  q * 11 - 150, q * 3 - 100);
+            size_t expected = 0;
+            foreach (item; items)
+                if (item.bounds.intersects(query)) ++expected;
+
+            bool[ulong] found;
+            auto count = tree.search(query, (ulong id) {
+                assert((id in found) is null);
+                found[id] = true;
+                assert(items[cast(size_t) id].bounds.intersects(query));
+                return true;
+            });
+            assert(count == expected);
+        }
+
+        if (n > 16)
+        {
+            foreach (i; 0 .. n)
+            {
+                if (i % 3 == 0)
+                    assert(tree.remove(cast(ulong) i));
+                else if (i % 3 == 1)
+                    assert(tree.update(cast(ulong) i,
+                        Box(2000, cast(int) i, 2005, cast(int) i + 1)));
+            }
+            assert(tree._checkInvariants());
+        }
+        assert(tree.bulkLoad(items));
+        assert(tree.length == n && tree._checkInvariants());
+    }
+}

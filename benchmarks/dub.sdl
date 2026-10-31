@@ -1,0 +1,6 @@
+name "spatial-index-benchmark"
+description "Small reproducible RTreeX M3 workload harness"
+license "MIT"
+targetType "executable"
+sourcePaths "source"
+dependency "spatial-index-d" path=".."

@@ -1,0 +1,70 @@
+name: M3 Performance Evidence
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "source/spatial_index/rtreex.d"
+      - "benchmarks/**"
+      - ".github/workflows/m3-performance.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "source/spatial_index/rtreex.d"
+      - "benchmarks/**"
+      - ".github/workflows/m3-performance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  comparison:
+    name: M3 / ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [dmd-2.111.0, ldc-1.41.0]
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ${{ matrix.compiler }}
+          dub: 1.40.0
+      - name: Build benchmark
+        working-directory: benchmarks
+        shell: bash
+        run: dub build --build=release --compiler="$DC" --force
+      - name: Download pinned OSM sample (Liechtenstein 2013)
+        shell: bash
+        run: |
+          mkdir -p build/m3
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://raw.githubusercontent.com/osm2pgsql-dev/osm2pgsql/7e44c916d17c20a6eea3882f946fd74f4773b738/tests/data/liechtenstein-2013-08-03.osm.bz2" \
+            -o build/m3/liechtenstein-2013-08-03.osm.bz2
+          python3 benchmarks/extract_osm.py \
+            build/m3/liechtenstein-2013-08-03.osm.bz2 \
+            build/m3/liechtenstein.csv
+      - name: Run release-build comparisons
+        shell: bash
+        run: |
+          set -euo pipefail
+          for case in "10000 urban" "100000 sparse" "100000 long" "1000000 urban"; do
+            set -- $case
+            echo "=== workload: entries=$1 shape=$2 compiler=$DC ==="
+            (cd benchmarks && dub run --build=release --compiler="$DC" -- "$1" "$2") \
+              | tee "build/m3/${{ matrix.compiler }}-$1-$2.csv"
+          done
+          echo "=== actual OSM sample (complete) ==="
+          (cd benchmarks && dub run --build=release --compiler="$DC" -- 1000000 osm "../build/m3/liechtenstein.csv") \
+            | tee "build/m3/${{ matrix.compiler }}-liechtenstein.csv"
+      - name: Upload measured evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3-performance-${{ matrix.compiler }}
+          # Only benchmark results; do not redistribute the ODbL input corpus.
+          path: build/m3/${{ matrix.compiler }}-*.csv
+          retention-days: 30

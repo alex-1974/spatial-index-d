@@ -2,8 +2,9 @@
 
 Reusable spatial indexing data structures for D.
 
-**Status:** RTreeX M1/M2 implementation in qualification; **not yet released**
-or published to DUB. The API can change before the first public release.
+**Status:** M1/M2 and M3 implemented and CI-qualified on `develop`;
+**not yet released** or published to DUB. The API may evolve before its
+first public release.
 
 ## Purpose
 
@@ -17,22 +18,30 @@ when there is a concrete consumer need.
 
 ## RTreeX: first dynamic index
 
-The M1/M2 implementation in `spatial_index.rtreex` provides:
+The M1–M3 implementation in `spatial_index.rtreex` provides:
 
 - 2D, closed/inclusive `Bounds2` with `int`, `long`, `float` or `double`.
 - Unique caller-supplied `uint`/`ulong` entry IDs and non-owning payload identity.
 - Insert, remove, update, lookup, clear and visitor-based intersection search.
+- Validated, replacement-style `bulkLoad(Item[])` using balanced
+  OMT-inspired spatial grouping, with no retained caller buffers.
 - Compact array-backed node pool with slot reuse and root contraction.
+- `storageStats` for node slots and a clearly labeled structural memory
+  lower bound (not total RAM usage).
 - R*-inspired subtree selection and split (without forced reinsertion).
 - No result-array allocation in the search implementation; results are
   bounding-box candidates, not exact geometry matches.
 
-**Not yet included:** nearest-neighbor, radial search, OMT bulk loading,
-snapshots, persistence, thread-safe mutation or a static packed index.
+**Not yet included:** nearest-neighbor, radial search, snapshots, persistence,
+thread-safe mutation or a separate static packed index.
 
 The initial contract is documented in
-[ADR-0002](docs/adr/ADR-0002-rtreex-m1-contract.md). The algorithms will be
-qualified on representative editor workloads before release.
+[ADR-0002](docs/adr/ADR-0002-rtreex-m1-contract.md), the bulk-loading choice
+in [ADR-0003](docs/adr/ADR-0003-m3-bulk-loading.md).
+See [M3 benchmark instructions](benchmarks/README.md) and
+[the measured M3 report](docs/m3-performance-2026-10-31.md) for repeatable
+build, query, memory and update comparisons. Performance evidence does not
+imply a release.
 
 ### Basic use
 
@@ -51,6 +60,15 @@ assert(visited == 1);
 
 assert(index.update(101, Box(20, 20, 30, 30)));
 assert(index.remove(101));
+
+// Rebuild from a complete batch of copied entries:
+alias Item = RTreeX!(double, ulong).Item;
+Item[] batch = [
+    Item(101, Box(10, 10, 20, 20)),
+    Item(102, Box(100, 100, 101, 101)),
+];
+assert(index.bulkLoad(batch));
+assert(index.length == 2);
 ```
 
 The index does not depend on Dunia, `geo-d` or an OSM schema. Use a thin

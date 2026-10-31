@@ -2,9 +2,9 @@
 
 ## Status
 
-M1/M2 dynamic RTreeX implementation prepared and tested on a feature branch;
-no public release or DUB registry publication. The first supported dimension
-is 2D; other index families and dimensions are not implied.
+M1/M2 dynamic RTreeX and M3 packed bulk loading plus practical performance
+qualification are complete. No public release or DUB registry publication.
+The initial dimension is 2D. See `docs/m3-performance-2026-10-31.md`.
 
 ## M0 — Repository baseline
 
@@ -43,12 +43,16 @@ is 2D; other index families and dimensions are not implied.
 
 ## M3 — Bulk loading and performance
 
-- [ ] Implement a simple, correct bulk-loader as baseline.
-- [ ] Evaluate RBush-inspired OMT versus STR/Hilbert ordering where justified.
-- [ ] Compare query/build/update latency and bytes/object for approximately
-      10k, 100k and 1M objects on representative OSM extracts.
-- [ ] Consider SIMD only if profiling shows bounding-box tests matter.
-- [ ] Do not add a hybrid static/dynamic index before measured need.
+- [x] Establish repeated insertion as the baseline and implement an
+      OMT-inspired packed `bulkLoad` for complete replacement.
+- [x] Assess STR and Hilbert alternatives; defer more implementations without
+      a measured consumer requirement (ADR-0003).
+- [x] Compare build/query/update and approximate GC allocations for 10k,
+      100k, 1M synthetic OSM-shaped objects, plus 72,854 actual OSM
+      node/way bounding boxes from pinned 2013 Liechtenstein test data.
+- [x] Document uneven query effects and release-build benchmark limitations.
+- [x] Defer SIMD without evidence of a query bottleneck.
+- [x] Keep a single dynamic index; no speculative static/dynamic hybrid.
 
 ## M4 — Dunia integration
 

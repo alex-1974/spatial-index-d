@@ -34,6 +34,23 @@ void main()
     assert(tree.remove(15));
     assert(tree.remove(16));
     assert(tree.empty);
+
+    alias Item = RTreeX!(double, ulong).Item;
+    Item[] newData = [
+        Item(100, Box(0, 0, 1, 1)),
+        Item(101, Box(5, 5, 6, 6)),
+    ];
+    assert(tree.bulkLoad(newData));
+    assert(tree.length == 2);
+    assert(tree.search(Box(1, 1, 1, 1), (ulong id) {
+        return true;
+    }) == 1);
+    newData[0].bounds = Box(100, 100, 100, 100);
+    assert(tree.tryGetBounds(100, stored));
+    assert(stored == Box(0, 0, 1, 1));
+    assert(tree.update(101, Box(6, 6, 7, 7)));
+    assert(tree.remove(100));
+    assert(tree.remove(101));
     safeConsumer();
 }
 
@@ -44,6 +61,11 @@ void main()
     alias B = Bounds2!int;
     RTreeX!(int, uint) index;
     assert(index.insert(3, B(0, 0, 5, 5)));
+    RTreeX!(int, uint).Item[] items = [
+        { 3, B(0, 0, 5, 5) },
+        { 4, B(10, 10, 11, 11) },
+    ];
+    assert(index.bulkLoad(items));
     size_t seen;
     auto count = index.search(B(1, 1, 2, 2), (uint id) @safe {
         ++seen;
@@ -52,4 +74,5 @@ void main()
     assert(count == 1 && seen == 1);
     assert(index.update(3, B(4, 4, 6, 6)));
     assert(index.remove(3));
+    assert(index.remove(4));
 }

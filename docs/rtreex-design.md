@@ -1,6 +1,6 @@
 # RTreeX — M1/M2 Implementation Notes
 
-**Status:** implemented on feature branch; DUB release not yet prepared.
+**Status:** M1–M3 implemented and CI-qualified; no DUB release prepared.
 
 ## API and semantics
 
@@ -10,6 +10,7 @@ The accepted public contract is
 - `RTreeX!(T, Id = ulong, MaxEntries = 16)`
 - `Bounds2!T(minX, minY, maxX, maxY)`; default `.init` is invalid/empty.
 - `insert(id, bounds)`, `remove(id)`, `update(id, bounds)`
+- `bulkLoad(scope const(Item)[])` replaces the entire index after validation
 - `tryGetBounds(id, ref bounds)`, `search(bounds, visitor)`
 - `length`, `empty` and `clear`
 
@@ -85,9 +86,33 @@ Compiler qualification: fast DMD 2.111.0 and LDC 1.41.0 CI, additional
 controlled six-compiler matrix at release gate. CI is authoritative, not a
 claim about local XPS builds.
 
-## Explicitly deferred beyond M2
+## M3: packed construction and performance
 
-- OMT / STR / Hilbert bulk load; see Issue #4 (M3).
+M3 introduces a single OMT-inspired, balanced two-axis packed builder.
+It sorts x-oriented slices, sorts y within each slice, and packs each level
+into uniform-height nodes. The new builder reuses all existing dynamic
+operations. It deliberately does not add original RBush quickselect,
+independent STR/Hilbert index variants or forced reinsertion.
+
+- Validation rejects duplicate IDs and invalid boxes before adoption.
+- Construction uses temporary state; callers' input arrays are not retained.
+- Query and update correctness is verified after each rebuilt tree.
+- On GitHub Actions LDC 1.41, the build speedup was 7.3x on a 1M-entry
+  synthetic urban corpus and 5.8x on the 72,854-entry actual OSM fixture.
+- Query timings were not uniformly better: for 1M urban entries, 200
+  queries took 1.946 ms after packed loading versus 1.270 ms after
+  incremental insertion. No blanket search-speed advantage is claimed.
+- DMD 2.111 and LDC 1.41 performed the comparisons; see
+  `docs/m3-performance-2026-10-31.md`, CSV artifacts and
+  `benchmarks/README.md`.
+- `storageStats` exposes node slots and a clear structural byte lower bound.
+- GC allocation deltas are indicative, not reliable exact index footprint.
+
+See [ADR-0003](adr/ADR-0003-m3-bulk-loading.md).
+
+## Explicitly deferred beyond M3
+
+- Additional STR/Hilbert algorithms; M3 includes only OMT-inspired bulk load.
 - Runtime nearest-neighbor/radius contracts and metrics.
 - Specialized compact leaf layouts and SIMD.
 - Packed static tree or two-tier static/dynamic index.
