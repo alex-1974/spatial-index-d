@@ -3,7 +3,7 @@
 ## Status and provenance
 
 This is a reproducible **single-sample** engineering comparison of RTreeX
-incremental insertion and packed OMT-inspired `bulkLoad`. It is not a
+incremental insertion and packed OMT-inspired `replaceAll`. It is not a
 scientific benchmark and does not establish a universal speed ranking.
 
 - Code: `feature/m3-bulk-performance`.
@@ -49,8 +49,9 @@ these cases. No universal query-speed advantage is claimed.
 
 ## Structural storage
 
-`storageStats.minimumBytes` adds occupied node-array values, free-list
-values, and raw ID/rectangle pairs from the lookup table. It excludes AA
+The M3 internal storage snapshot added occupied node-array values,
+free-list values, and raw ID/rectangle pairs from the lookup table.
+These diagnostics were deliberately kept out of the public consumer API. It excludes AA
 bucket/allocator overhead, runtime capacity, temporary buffers and stack.
 It is a **lower bound on structural storage**, not resident bytes or full
 GC memory. The same value results from DMD and LDC under this layout.
