@@ -1,0 +1,41 @@
+name: Release Gate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compilers:
+    name: Release / ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - dmd-2.111.0
+          - dmd-2.112.1
+          - dmd-2.113.0
+          - ldc-1.41.0
+          - ldc-1.42.0
+          - ldc-1.43.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ${{ matrix.compiler }}
+          dub: 1.40.0
+      - name: Unit tests
+        run: dub test --compiler="$DC" --force
+      - name: Consumer
+        working-directory: tests/consumer
+        run: dub run --compiler="$DC" --force
+      - name: Release build
+        run: dub build --build=release --compiler="$DC" --force

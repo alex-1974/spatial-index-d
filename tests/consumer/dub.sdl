@@ -1,0 +1,8 @@
+name "spatial-index-consumer-test"
+description "External consumer compilation smoke test for spatial-index-d"
+license "MIT"
+
+targetType "executable"
+targetPath "../../build/consumer"
+
+dependency "spatial-index-d" path="../.."

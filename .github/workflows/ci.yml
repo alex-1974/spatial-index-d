@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: Fast / ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - dmd-2.111.0
+          - ldc-1.41.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up D
+        uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ${{ matrix.compiler }}
+          dub: 1.40.0
+      - name: Test package
+        run: dub test --compiler="$DC" --force
+      - name: Test external consumer
+        working-directory: tests/consumer
+        run: dub run --compiler="$DC" --force
+      - name: Release build
+        run: dub build --build=release --compiler="$DC" --force

@@ -1,0 +1,18 @@
+.dub/
+dub.selections.json
+/build/
+docs.json
+__dummy.html
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+spatial-index-d-test-*
+spatial-index-consumer-test-*
+
+# Local d-geospatial-workspace context; never publish it.
+.workspace/

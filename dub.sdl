@@ -1,0 +1,11 @@
+name "spatial-index-d"
+description "Spatial indexing data structures for D; first planned index: RTreeX"
+homepage "https://github.com/alex-1974/spatial-index-d"
+authors "Alexander Bernardi"
+copyright "Copyright © 2026 Alexander Bernardi"
+license "MIT"
+
+toolchainRequirements frontend=">=2.111.0"
+
+targetType "library"
+sourcePaths "source"
