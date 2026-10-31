@@ -69,6 +69,10 @@ under the Open Database License (ODbL). The CI workflow downloads the
 original data from the pinned upstream source; its artifacts contain
 **measurement CSVs only**, not an extracted OSM database.
 
+For the final M3 comparison with structural bytes/entry, node slots and
+explicit compiler/workload provenance, see
+[`docs/m3-performance-2026-10-31.md`](../docs/m3-performance-2026-10-31.md).
+
 ## Validated initial CI comparison
 
 GitHub Actions Ubuntu 24.04 shared runner, release builds (one sample per
