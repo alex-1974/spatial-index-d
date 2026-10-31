@@ -105,6 +105,7 @@ independent STR/Hilbert index variants or forced reinsertion.
   incremental insertion. No blanket search-speed advantage is claimed.
 - DMD 2.111 and LDC 1.41 performed the comparisons; see the CSV logs and
   `benchmarks/README.md`.
+- `storageStats` exposes node slots and a clear structural byte lower bound.
 - GC allocation deltas are indicative, not reliable exact index footprint.
 
 See [ADR-0003](adr/ADR-0003-m3-bulk-loading.md).
