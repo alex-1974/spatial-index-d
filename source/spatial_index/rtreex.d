@@ -6,8 +6,9 @@
  * query returns bounding-box candidates, not exact geometry intersections.
  *
  * Internally, RTreeX uses a compact array-backed node pool and R*-inspired
- * split and subtree-selection heuristics. Bulk loading and forced reinsertion
- * are not part of this initial implementation.
+ * split and subtree-selection heuristics. Packed construction uses an
+ * OMT-inspired balanced two-axis group builder. Forced reinsertion is not
+ * part of this implementation.
  *
  * See_Also:
  *   docs/adr/ADR-0002-rtreex-m1-contract.md
