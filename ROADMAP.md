@@ -2,9 +2,9 @@
 
 ## Status
 
-M1/M2 dynamic RTreeX is integrated on `develop`; M3 packed bulk loading
-and practical benchmark evidence are being qualified for integration.
-No public release or DUB registry publication. The initial dimension is 2D.
+M1/M2 dynamic RTreeX and M3 packed bulk loading plus practical performance
+qualification are complete. No public release or DUB registry publication.
+The initial dimension is 2D. See `docs/m3-performance-2026-10-31.md`.
 
 ## M0 — Repository baseline
 
