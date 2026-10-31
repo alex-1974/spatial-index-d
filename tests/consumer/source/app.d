@@ -22,6 +22,8 @@ void main()
         return true;
     });
     assert(visited == 1 && selected.length == 1 && selected[0] == 15);
+    auto found = tree.search(Box(5, 5, 12, 12));
+    assert(found.length == 1 && found[0] == 15);
 
     assert(tree.update(15, Box(100, 100, 110, 110)));
     assert(tree.search(Box(5, 5, 12, 12), (ulong id) {
