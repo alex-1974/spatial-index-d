@@ -22,6 +22,8 @@ import std.traits : isFloatingPoint;
  *
  * Touching edges and zero-area rectangles are valid and intersect inclusively.
  * All coordinates must be finite for floating-point scalar types.
+ * The default `Bounds2!T.init` is an invalid (empty) sentinel; construct
+ * `Bounds2!T(0, 0, 0, 0)` explicitly to represent the origin as a point.
  *
  * Params:
  *   T = `int`, `long`, `float` or `double`.
@@ -31,13 +33,13 @@ if (is(T == int) || is(T == long) ||
     is(T == float) || is(T == double))
 {
     /// Lower x coordinate.
-    T minX;
+    T minX = T.max;
     /// Lower y coordinate.
-    T minY;
+    T minY = T.max;
     /// Upper x coordinate.
-    T maxX;
+    T maxX = T.min;
     /// Upper y coordinate.
-    T maxY;
+    T maxY = T.min;
 
     /**
      * Whether this rectangle is ordered and finite.
@@ -731,6 +733,8 @@ unittest
     alias Box = Bounds2!double;
     assert(Box(0, 0, 1, 1).intersects(Box(1, 1, 2, 2)));
     assert(Box(1, 1, 1, 1).isValid());
+    assert(!Box.init.isValid());
+    assert(Box(0, 0, 0, 0).isValid());
     assert(!Box(1, 1, 0, 0).isValid());
     assert(!Box(double.nan, 0, 1, 1).isValid());
     assert(!Box(double.infinity, 0, 1, 1).isValid());
