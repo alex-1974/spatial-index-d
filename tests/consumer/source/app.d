@@ -76,3 +76,17 @@ void main()
     assert(index.remove(3));
     assert(index.remove(4));
 }
+
+
+// Keep implementation details out of the consumer's public surface.
+// Both checks compile when the forbidden spellings are inaccessible.
+static assert(!__traits(compiles, RTreeX!(double, ulong, 4).init));
+static assert(!__traits(compiles, {
+    RTreeX!(double, ulong) index;
+    auto diagnostic = index.storageStats;
+}));
+static assert(!__traits(compiles, {
+    RTreeX!(double, ulong) index;
+    RTreeX!(double, ulong).Item[] entries;
+    index.bulkLoad(entries);
+}));
