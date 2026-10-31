@@ -50,8 +50,10 @@
 
 ## Queries
 
-- `search(bounds, visitor)` visits all matching ID candidates or stops when
-  a visitor returns `false`. Return value is the number of callbacks invoked.
+- `search(bounds)` returns a newly allocated array of candidate IDs.
+- `search(bounds, visitor)` visits matching IDs without allocating a result
+  array and stops when a visitor returns `false`. The return value is
+  the number of callbacks invoked.
 - No guaranteed result iteration order (insertion history affects shape).
 - The query path itself performs no explicit heap allocation; the caller is
   responsible for any allocation in its visitor.
