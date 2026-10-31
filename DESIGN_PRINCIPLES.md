@@ -68,3 +68,8 @@ must have a demonstrated real consumer use case, clear semantics and tests.
 Naming must not hide important behavior: `replaceAll(items)` means it replaces
 the entire index; `insert(item)` does not. Range searches return candidate
 IDs based on rectangular overlap, never an implicit exact geometry match.
+
+The preferred one-argument `search(bounds)` returns matching IDs and
+allocates its result array. The two-argument `search(bounds, visitor)` enables
+high-throughput, allocation-free traversal for callers such as Dunia. Both
+overloads are named by the consumer task rather than the traversal algorithm.
