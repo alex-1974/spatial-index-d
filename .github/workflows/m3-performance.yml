@@ -65,5 +65,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: m3-performance-${{ matrix.compiler }}
-          path: build/m3/*.csv
+          # Only benchmark results; do not redistribute the ODbL input corpus.
+          path: build/m3/${{ matrix.compiler }}-*.csv
           retention-days: 30
