@@ -37,3 +37,6 @@ jobs:
         run: dub run --compiler="$DC" --force
       - name: Release build
         run: dub build --build=release --compiler="$DC" --force
+      - name: M3 benchmark smoke (2k urban)
+        working-directory: benchmarks
+        run: dub run --build=release --compiler="$DC" --force -- 2000 urban
