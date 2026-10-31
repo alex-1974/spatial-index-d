@@ -831,3 +831,81 @@ unittest
             assert(tree.remove(id));
     assert(tree.empty && tree._checkInvariants());
 }
+
+
+unittest
+{
+    // Deterministic mixed-operation differential test. The reference map
+    // deliberately does not reuse the tree's traversal or split algorithms.
+    alias Box = Bounds2!int;
+    RTreeX!(int, ulong, 4) tree;
+    Box[ulong] reference;
+    uint state = 0xC001D00Du;
+
+    uint nextRandom()
+    {
+        state = state * 1664525u + 1013904223u;
+        return state;
+    }
+
+    foreach (step; 0 .. 6_000)
+    {
+        const ulong id = cast(ulong) (nextRandom() % 170u);
+        const uint operation = nextRandom() % 5u;
+        const int x = cast(int) (nextRandom() % 350u) - 175;
+        const int y = cast(int) (nextRandom() % 350u) - 175;
+        // Mix points, long thin rectangles, and ordinary boxes.
+        const int dx = id % 11 == 0 ? 450 : cast(int) (nextRandom() % 15u);
+        const int dy = id % 7 == 0 ? 0 : cast(int) (nextRandom() % 15u);
+        const Box bounds = Box(x, y, x + dx, y + dy);
+
+        if (operation == 0)
+        {
+            const bool present = (id in reference) !is null;
+            assert(tree.insert(id, bounds) == !present);
+            if (!present) reference[id] = bounds;
+        }
+        else if (operation == 1)
+        {
+            const bool present = (id in reference) !is null;
+            assert(tree.remove(id) == present);
+            if (present) reference.remove(id);
+        }
+        else if (operation == 2)
+        {
+            const bool present = (id in reference) !is null;
+            assert(tree.update(id, bounds) == present);
+            if (present) reference[id] = bounds;
+        }
+        else
+        {
+            const Box query = Box(x, y, x + 30, y + 30);
+            size_t expected = 0;
+            foreach (candidateId, candidateBounds; reference)
+                if (candidateBounds.intersects(query)) ++expected;
+
+            bool[ulong] seen;
+            const size_t actual = tree.search(query, (ulong candidateId) {
+                assert((candidateId in seen) is null);
+                seen[candidateId] = true;
+                auto known = candidateId in reference;
+                assert(known !is null && (*known).intersects(query));
+                return true;
+            });
+            assert(actual == expected);
+
+            if (expected != 0)
+                assert(tree.search(query, (ulong candidateId) {
+                    return false;
+                }) == 1);
+        }
+
+        if (step % 17 == 0)
+        {
+            assert(tree._checkInvariants());
+            assert(tree.length == reference.length);
+        }
+    }
+    assert(tree._checkInvariants());
+    assert(tree.length == reference.length);
+}
