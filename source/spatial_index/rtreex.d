@@ -138,6 +138,20 @@ if (is(T == int) || is(T == long) ||
         Entry[MaxEntries + 1] entries;
     }
 
+    /**
+     * One copied rectangle and its stable, caller-owned identifier.
+     *
+     * This is a value-only transfer record; the tree never retains the
+     * caller's Item array. It does not take ownership of application geometry.
+     */
+    struct Item
+    {
+        /// Caller-supplied unique ID.
+        Id id;
+        /// Finite, ordered rectangle to index.
+        Box bounds;
+    }
+
     private Node[] _nodes;
     private size_t[] _free;
     private size_t _root = none;
@@ -198,6 +212,163 @@ if (is(T == int) || is(T == long) ||
         _boxes[id] = bounds;
         ++_size;
         return true;
+    }
+
+
+    /**
+     * Replace all indexed entries with a packed, spatially organized tree.
+     *
+     * The caller's Item array remains unchanged and can be discarded after
+     * the call. This method accepts any number of entries, including zero,
+     * and rebuilds the tree in O(n log n) expected sorting time rather than
+     * repeatedly calling insert. A two-axis, overlap-minimizing top-down
+     * (OMT-inspired) grouping heuristic is applied at every tree level.
+     *
+     * All input is validated before the current tree is changed. The method
+     * returns false for invalid boxes or duplicate IDs and leaves the prior
+     * tree untouched in that case. Memory allocation failures can still
+     * throw; no out-of-memory rollback is promised by the public API.
+     *
+     * Params:
+     *   items = Caller-owned items with unique IDs and valid rectangles.
+     *
+     * Returns: true on success, false for duplicate IDs or invalid bounds.
+     *
+     * Examples:
+     * ---
+     * RTreeX!(double, uint) tree;
+     * alias B = Bounds2!double;
+     * RTreeX!(double, uint).Item[] items = [
+     *     { 11, B(0, 0, 5, 5) },
+     *     { 12, B(8, 8, 9, 9) }
+     * ];
+     * assert(tree.bulkLoad(items));
+     * assert(tree.length == 2);
+     * assert(tree.search(B(1, 1, 2, 2), (uint id) {
+     *     return true;
+     * }) == 1);
+     * ---
+     */
+    bool bulkLoad(scope const(Item)[] items)
+    {
+        // Build in detached storage, so rejected input cannot destroy the
+        // previous tree. The new pool/map are adopted only on success.
+        RTreeX!(T, Id, MaxEntries) candidate;
+        Entry[] level;
+        level.length = items.length;
+
+        foreach (i, item; items)
+        {
+            if (!item.bounds.isValid() ||
+                (item.id in candidate._boxes) !is null)
+                return false;
+
+            candidate._boxes[item.id] = item.bounds;
+            level[i] = Entry(item.bounds, item.id, none);
+        }
+
+        candidate._size = items.length;
+        if (level.length != 0)
+        {
+            bool leaves = true;
+            while (level.length > MaxEntries)
+            {
+                level = candidate._buildLevel(level, leaves);
+                leaves = false;
+            }
+
+            // The final root is exempt from the minimum occupancy rule.
+            const size_t root = candidate._allocateNode(leaves);
+            foreach (i, item; level)
+                candidate._nodes[root].entries[i] = item;
+            candidate._nodes[root].count = level.length;
+            candidate._root = root;
+        }
+
+        _nodes = candidate._nodes;
+        _free = candidate._free;
+        _boxes = candidate._boxes;
+        _root = candidate._root;
+        _size = candidate._size;
+        return true;
+    }
+
+    // OMT-inspired grouping of one tree level: sort by minX into spatial
+    // columns sized by the number of target groups, then sort each column by
+    // minY and pack balanced groups. Every non-root group is >= minimum.
+    private Entry[] _buildLevel(Entry[] level, bool leaves)
+    {
+        import std.algorithm.sorting : sort;
+
+        const size_t groups = (level.length - 1) / MaxEntries + 1;
+        assert(groups >= 2);
+        const size_t smallGroup = level.length / groups;
+        const size_t largerGroups = level.length % groups;
+        assert(smallGroup >= minimum);
+
+        size_t columns = 1;
+        while (columns < groups / columns ||
+               (columns * columns < groups))
+            ++columns;
+
+        // Equal-size columns by *number of groups*. This prevents tiny
+        // underfull leaf groups at slice boundaries.
+        sort!((a, b) => _bulkLess(a, b, 0))(level);
+
+        Entry[] parents;
+        parents.length = groups;
+        size_t first = 0;
+        size_t nextGroup = 0;
+        foreach (column; 0 .. columns)
+        {
+            const size_t columnGroups = groups / columns +
+                (column < groups % columns ? 1 : 0);
+            size_t columnLength = columnGroups * smallGroup;
+            if (nextGroup < largerGroups)
+            {
+                const size_t countLarger = largerGroups - nextGroup;
+                columnLength += countLarger < columnGroups ?
+                    countLarger : columnGroups;
+            }
+
+            sort!((a, b) => _bulkLess(a, b, 1))(
+                level[first .. first + columnLength]);
+
+            size_t offset = first;
+            foreach (g; 0 .. columnGroups)
+            {
+                const size_t groupLength = smallGroup +
+                    (nextGroup < largerGroups ? 1 : 0);
+                const size_t nodeIndex = _allocateNode(leaves);
+                foreach (k; 0 .. groupLength)
+                    _nodes[nodeIndex].entries[k] = level[offset + k];
+                _nodes[nodeIndex].count = groupLength;
+                parents[nextGroup] = Entry(_nodeBounds(nodeIndex),
+                                           Id.init, nodeIndex);
+                offset += groupLength;
+                ++nextGroup;
+            }
+            first += columnLength;
+            assert(offset == first);
+        }
+        assert(first == level.length && nextGroup == groups);
+        return parents;
+    }
+
+    // Deterministic ordering even for equal minimum coordinates; internal
+    // entries with Id.init are distinguished by their child pool index.
+    private static bool _bulkLess(Entry a, Entry b, size_t axis)
+    {
+        const T ak = axis == 0 ? a.box.minX : a.box.minY;
+        const T bk = axis == 0 ? b.box.minX : b.box.minY;
+        if (ak < bk) return true;
+        if (ak > bk) return false;
+        const T as = axis == 0 ? a.box.minY : a.box.minX;
+        const T bs = axis == 0 ? b.box.minY : b.box.minX;
+        if (as < bs) return true;
+        if (as > bs) return false;
+        if (a.id != b.id) return a.id < b.id;
+        return a.child < b.child;
     }
 
     /**
