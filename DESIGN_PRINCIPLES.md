@@ -45,3 +45,26 @@ simplest correct design that satisfies common editing workloads.
 
 Index ABI and DUB dependencies must not depend on local workspace directory
 layout. A public API is a compatibility commitment.
+
+
+## Public naming follows consumer intent
+
+Public declarations should say **what the caller wants to do**, not **how the
+tree happens to implement it**. Names such as `insert`, `remove`, `update`,
+`search`, `replaceAll`, `clear`, `length`, `empty` and `tryGetBounds`
+are intentional.
+
+Implementation algorithms (R*-split, OMT grouping, balancing, free lists),
+node occupancies, traversal mechanics and storage diagnostics belong in private
+declarations and technical documentation, not as everyday API options.
+`RTreeX` is the one deliberate technical name: it identifies the index
+family without exposing its implementation strategy.
+
+Prefer defaults that work for typical consumers. Do not add public template
+knobs, policy enums, strategy flags, or diagnostic types merely because an
+internal implementation supports them. Any eventual specialist extension
+must have a demonstrated real consumer use case, clear semantics and tests.
+
+Naming must not hide important behavior: `replaceAll(items)` means it replaces
+the entire index; `insert(item)` does not. Range searches return candidate
+IDs based on rectangular overlap, never an implicit exact geometry match.
