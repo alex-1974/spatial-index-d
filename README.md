@@ -47,7 +47,7 @@ imply a release.
 import spatial_index.rtreex : Bounds2, RTreeX;
 
 alias Box = Bounds2!double;
-RTreeX!(double, ulong) index;
+RTreeX!double index;
 
 assert(index.insert(101, Box(0, 0, 10, 10)));
 auto matchingIDs = index.search(Box(9, 9, 20, 20));
@@ -63,7 +63,7 @@ assert(index.update(101, Box(20, 20, 30, 30)));
 assert(index.remove(101));
 
 // Rebuild from a complete batch of copied entries:
-alias Item = RTreeX!(double, ulong).Item;
+alias Item = RTreeX!double.Item;
 Item[] batch = [
     Item(101, Box(10, 10, 20, 20)),
     Item(102, Box(100, 100, 101, 101)),
