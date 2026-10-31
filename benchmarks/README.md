@@ -28,7 +28,12 @@ does not invoke the full independent correctness suite; CI does that.
 `gc_used_delta_bytes` is the rough change in D GC allocated-used memory over
 construction, *not* an exact footprint. It excludes memory in unmanaged native
 allocators and depends on GC collection/implementation and temporary buffers.
-Do not interpret this as a precise bytes-per-entry measurement.
+`minimum_structural_bytes` is a different, explicit lower-bound quantity:
+node pool slot bytes + free-list contents + raw ID/bounds lookup values.
+Divide it by `entries` for the structural **minimum bytes per item**, but
+remember that runtime map buckets and unused allocator capacity are excluded.
+`node_slots` exposes the high-water slot count (including recycled nodes).
+Neither measure equals process RSS.
 
 Timing uses a monotonic clock, includes allocator effects and depends on
 hardware/load; compare methods within each run, repeat on the intended XPS.
